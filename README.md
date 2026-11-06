@@ -25,7 +25,7 @@ https://github.com/user-attachments/assets/daae0661-46ec-4bcc-ac1b-9dedd5bc3615
 
 ## 亮点
 
-<img src="docs/media/features.svg" width="100%" alt="十人全息 3D 复盘；激情中文解说；总能出片，质量分档；零 key 也能跑">
+<img src="docs/media/features.svg" width="100%" alt="十人全息 3D 复盘；激情中文解说；总能出片，质量分档；没有 API key 也能出片">
 
 **无人工干预**：检测并跟踪十名球员和裁判、标定球场、读号码认人、找出手和球路、按战术阶段渲染 3D 复盘、写解说稿并配音、剪辑成片。任何一环不确定都降级展示（少画铭牌、不显示 xFG、跳过 3D……），`report.json` 逐项写明每个元素的档位（A 完整 / B 降级 / C 省略）和原因。
 
