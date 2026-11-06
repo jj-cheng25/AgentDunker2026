@@ -1,0 +1,277 @@
+<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block}</style><style>
+@font-face{font-family:"Avenir Next";src:url("__FONTS__/Montserrat-Italic-VF.ttf");font-style:italic;font-weight:100 900}
+@font-face{font-family:"Avenir Next";src:url("__FONTS__/Montserrat-VF.ttf");font-style:normal;font-weight:100 900}
+@font-face{font-family:"Source Han Sans SC";src:url("__FONTS__/NotoSansSC-VF.ttf");font-weight:100 900}
+</style></head><body>
+<canvas id="c" width="1920" height="1080"></canvas>
+<img id="fz" src="__FREEZE__" style="display:none">
+<script>
+
+const W = 1920, H = 1080, DUR = 6.0;
+const cv = document.getElementById('c'), g = cv.getContext('2d');
+const CYAN = '#3fe0ff', ORANGE = '#ff8a3d';
+
+// ---------- helpers ----------
+function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const easeOut = x => 1 - Math.pow(1 - x, 3);
+const easeIn = x => x * x * x;
+const easeInOut = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const easeBack = x => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+
+// ---------- camera / projection ----------
+let CAM;
+function setCam(t) {
+  const k = easeInOut(prog(t, 0, 6));
+  const az = lerp(0.50, 0.20, k);
+  const dist = lerp(58, 47, k);
+  const h = lerp(31, 25, k);
+  const O = [0, 15, 0];
+  const C = [O[0] + dist * Math.sin(az), O[1] + dist * Math.cos(az), h];
+  const T = [0, 11, 6.5];
+  let f = norm(sub(T, C)), r = norm(cross(f, [0, 0, 1])), u = cross(r, f);
+  CAM = { C, f, r, u, focal: (H / 2) / Math.tan(30 * Math.PI / 180) };
+}
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const norm = a => { const l = Math.hypot(a[0], a[1], a[2]); return [a[0] / l, a[1] / l, a[2] / l]; };
+function P(p) {
+  const d = sub(p, CAM.C);
+  const x = dot(d, CAM.r), y = dot(d, CAM.u), z = dot(d, CAM.f);
+  return [W / 2 + x / z * CAM.focal, H / 2 + 60 - y / z * CAM.focal, z];
+}
+
+// ---------- court geometry (feet; baseline y=0, hoop at (0,5.25)) ----------
+function arcPts(cx, cy, r, a0, a1, n = 64, z = 0) { const o = []; for (let i = 0; i <= n; i++) { const a = lerp(a0, a1, i / n); o.push([cx + r * Math.cos(a), cy + r * Math.sin(a), z]); } return o; }
+function linePts(a, b, n = 24) { const o = []; for (let i = 0; i <= n; i++) o.push([lerp(a[0], b[0], i / n), lerp(a[1], b[1], i / n), lerp(a[2] || 0, b[2] || 0, i / n)]); return o; }
+const a3 = Math.acos(22 / 23.75);
+const LINES = [
+  { pts: [].concat(linePts([-25, 47], [-25, 0], 40), linePts([-25, 0], [25, 0], 40), linePts([25, 0], [25, 47], 40), linePts([25, 47], [-25, 47], 40)), t0: 0.35, t1: 1.35, w: 2.4 },
+  { pts: [].concat(linePts([-8, 0], [-8, 19]), linePts([-8, 19], [8, 19]), linePts([8, 19], [8, 0])), t0: 0.65, t1: 1.25, w: 2.2 },
+  { pts: arcPts(0, 19, 6, 0, Math.PI * 2, 72), t0: 0.85, t1: 1.45, w: 2 },
+  { pts: [].concat(linePts([-22, 0], [-22, 14]), arcPts(0, 5.25, 23.75, Math.PI - a3, a3, 96), linePts([22, 14], [22, 0])), t0: 0.7, t1: 1.55, w: 2.4 },
+  { pts: arcPts(0, 5.25, 4, Math.PI, 0, 32), t0: 1.0, t1: 1.4, w: 1.8 },
+  { pts: arcPts(0, 47, 6, Math.PI, Math.PI * 2, 48), t0: 1.0, t1: 1.5, w: 2 },
+];
+const BOARD = [[-3, 4, 9], [3, 4, 9], [3, 4, 12.5], [-3, 4, 12.5], [-3, 4, 9]];
+const HOOP = arcPts(0, 5.25, 0.75, 0, Math.PI * 2, 32, 10);
+const HOOP_C = [0, 5.25, 10];
+
+const OFF = [[19, 22], [-20, 6], [-4.5, 9], [-11, 27], [8, 30]];
+const DEF = [[16, 19.5], [-17.5, 7.5], [-2, 7], [-9, 23.5], [6, 26]];
+const PLAYERS = [];
+OFF.forEach((p, i) => PLAYERS.push({ x: p[0], y: p[1], c: CYAN, t: 1.0 + i * 0.16, num: i === 0 ? '7' : '' }));
+DEF.forEach((p, i) => PLAYERS.push({ x: p[0], y: p[1], c: ORANGE, t: 1.08 + i * 0.16, num: '' }));
+
+
+function glowPath(pts, color, width, alpha, blur) {
+  if (pts.length < 2) return;
+  g.save(); g.globalAlpha = alpha; g.strokeStyle = color; g.lineJoin = 'round'; g.lineCap = 'round';
+  g.beginPath(); pts.forEach((p, i) => { const s = P(p); i ? g.lineTo(s[0], s[1]) : g.moveTo(s[0], s[1]); });
+  g.shadowColor = color; g.shadowBlur = blur; g.lineWidth = width * 3; g.globalAlpha = alpha * 0.35; g.stroke();
+  g.shadowBlur = blur * 0.5; g.lineWidth = width; g.globalAlpha = alpha; g.stroke();
+  g.shadowBlur = 0; g.strokeStyle = 'rgba(235,252,255,0.9)'; g.lineWidth = width * 0.4; g.stroke();
+  g.restore();
+}
+function partial(pts, p) { if (p <= 0) return []; const n = Math.max(2, Math.ceil(pts.length * p)); return pts.slice(0, Math.min(n, pts.length)); }
+
+
+// ======== 3D 战术解读 transition (4.4 s) ========
+const DURT = 4.4;
+const FZ = document.getElementById('fz');
+const R2 = rng(5), PTS = [];
+for (let i = 0; i < 140; i++) PTS.push({ x: R2() * W, y: R2() * H, s: 0.6 + R2() * 2, v: 20 + R2() * 60, ph: R2() * 6.28 });
+function setCam(t) {
+  const k = easeInOut(prog(t, 0.4, 4.4));
+  const az = lerp(-0.35, -0.12, k), dist = lerp(62, 44, k), h = lerp(40, 26, k);
+  const O = [0, 16, 0];
+  const C = [O[0] + dist * Math.sin(az), O[1] + dist * Math.cos(az), h];
+  const T = [0, 14, 2];
+  let f = norm(sub(T, C)), r = norm(cross(f, [0, 0, 1])), u = cross(r, f);
+  CAM = { C, f, r, u, focal: (H / 2) / Math.tan(30 * Math.PI / 180) };
+}
+// graded (hologram) copy of the freeze frame
+const holo = document.createElement('canvas'); holo.width = W; holo.height = H; const hg = holo.getContext('2d');
+function buildHolo() {
+  hg.filter = 'grayscale(1) brightness(0.75) contrast(1.25)'; hg.drawImage(FZ, 0, 0, W, H); hg.filter = 'none';
+  hg.globalCompositeOperation = 'multiply'; hg.fillStyle = '#3fc8ff'; hg.fillRect(0, 0, W, H);
+  hg.globalCompositeOperation = 'screen'; hg.fillStyle = 'rgba(10,40,70,0.55)'; hg.fillRect(0, 0, W, H);
+  hg.globalCompositeOperation = 'source-over';
+  hg.strokeStyle = 'rgba(120,230,255,0.18)'; hg.lineWidth = 1;
+  for (let x = 0; x <= W; x += 48) { hg.beginPath(); hg.moveTo(x, 0); hg.lineTo(x, H); hg.stroke(); }
+  for (let y = 0; y <= H; y += 48) { hg.beginPath(); hg.moveTo(0, y); hg.lineTo(W, y); hg.stroke(); }
+  hg.fillStyle = 'rgba(0,0,0,0.18)'; for (let y = 0; y < H; y += 4) hg.fillRect(0, y, W, 2);
+}
+const stage = document.createElement('canvas'); stage.width = W; stage.height = H; const sg = stage.getContext('2d');
+// freeze frame: scan-digitise then tilt back like a screen falling onto the floor
+function drawFreeze(t) {
+  const scan = easeInOut(prog(t, 0.08, 0.6)) * (H + 40) - 20;
+  sg.clearRect(0, 0, W, H);
+  sg.drawImage(FZ, 0, 0, W, H);
+  if (scan > 0) { sg.drawImage(holo, 0, 0, W, Math.min(H, scan), 0, 0, W, Math.min(H, scan)); }
+  const tilt = easeInOut(prog(t, 0.5, 1.7)) * 1.18;           // up to ~68 deg
+  const fade = 1 - 0.75 * easeOut(prog(t, 0.6, 2.2));
+  const D = 1500, by = H + 40 * easeOut(prog(t, 0.5, 1.7)), cx = W / 2;
+  g.save(); g.globalAlpha = fade;
+  // chromatic jitter right at the freeze
+  const jit = prog(t, 0.0, 0.25) < 1 ? (1 - prog(t, 0, 0.25)) * 14 : 0;
+  const strips = 180, sh = H / strips;
+  for (let i = 0; i < strips; i++) {
+    const y0 = i * sh, hgt = H - y0;                         // distance from bottom edge
+    const y3 = hgt * Math.cos(tilt), z3 = hgt * Math.sin(tilt);
+    const sc = D / (D + z3);
+    const y1 = (H - (i + 1) * sh), z1 = y1 * Math.sin(tilt), sc1 = D / (D + z1);
+    const sy = by - y3 * sc, sy1 = by - y1 * Math.cos(tilt) * sc1;
+    const w = W * sc;
+    g.drawImage(stage, 0, y0, W, sh + 1, cx - w / 2, sy, w, Math.max(1, sy1 - sy + 1));
+  }
+  if (jit > 0.5) { g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.25 * fade; g.filter = 'hue-rotate(160deg)'; g.drawImage(stage, jit, 0); g.filter = 'none'; }
+  g.restore();
+  // scan line
+  if (scan > 0 && scan < H) {
+    g.save(); g.globalCompositeOperation = 'lighter';
+    const lg = g.createLinearGradient(0, scan - 60, 0, scan + 6); lg.addColorStop(0, 'rgba(63,224,255,0)'); lg.addColorStop(0.85, 'rgba(63,224,255,0.35)'); lg.addColorStop(1, 'rgba(220,250,255,0.95)');
+    g.fillStyle = lg; g.fillRect(0, scan - 60, W, 66); g.restore();
+  }
+}
+function drawFloorGrid(t) {
+  const a = easeOut(prog(t, 0.8, 1.8)); if (a <= 0) return;
+  g.save(); g.globalAlpha = 0.22 * a; g.strokeStyle = CYAN; g.lineWidth = 1.2; g.shadowColor = CYAN; g.shadowBlur = 6;
+  for (let x = -60; x <= 60; x += 5) { const p = P([x, -15, 0]), q = P([x, 95, 0]); if (p[2] > 1 && q[2] > 1) { g.beginPath(); g.moveTo(p[0], p[1]); g.lineTo(q[0], q[1]); g.stroke(); } }
+  const off = (t * 6) % 5;
+  for (let y = -15; y <= 95; y += 5) { const yy = y - off; const p = P([-60, yy, 0]), q = P([60, yy, 0]); if (p[2] > 1 && q[2] > 1) { g.beginPath(); g.moveTo(p[0], p[1]); g.lineTo(q[0], q[1]); g.stroke(); } }
+  g.restore();
+}
+function drawCourtLines(t) {
+  LINES.forEach((L, i) => {
+    const p = easeInOut(prog(t, 2.55 + i * 0.1, 3.4 + i * 0.1)); if (p <= 0) return;
+    glowPath(partial(L.pts, p), CYAN, L.w, 0.8, 16);
+  });
+}
+function drawParts(t) {
+  g.save(); g.globalCompositeOperation = 'lighter';
+  const a = prog(t, 0.6, 1.4);
+  PTS.forEach(p => {
+    const y = ((p.y - p.v * t) % H + H) % H, x = p.x + Math.sin(t + p.ph) * 10;
+    g.fillStyle = `rgba(160,235,255,${a * (0.25 + 0.35 * Math.sin(t * 3 + p.ph) ** 2)})`; g.beginPath(); g.arc(x, y, p.s, 0, 6.283); g.fill();
+  });
+  g.restore();
+}
+// rotating wireframe cube
+const CUBE_V = []; for (const x of [-1, 1]) for (const y of [-1, 1]) for (const z of [-1, 1]) CUBE_V.push([x, y, z]);
+const CUBE_E = []; CUBE_V.forEach((a, i) => CUBE_V.forEach((b, j) => { if (j > i && (a[0] !== b[0]) + (a[1] !== b[1]) + (a[2] !== b[2]) === 1) CUBE_E.push([i, j]); }));
+function drawCube(ctx, cx, cy, size, t, a) {
+  const ry = t * 1.6, rx = 0.55 + Math.sin(t * 0.9) * 0.15;
+  const pr = v => { let [x, y, z] = v; const x1 = x * Math.cos(ry) + z * Math.sin(ry), z1 = -x * Math.sin(ry) + z * Math.cos(ry); const y1 = y * Math.cos(rx) - z1 * Math.sin(rx), z2 = y * Math.sin(rx) + z1 * Math.cos(rx); const s = 4 / (4 + z2); return [cx + x1 * size * s, cy + y1 * size * s]; };
+  ctx.save(); ctx.globalAlpha = a; ctx.lineCap = 'round';
+  [[1, 'rgba(63,224,255,1)', 3], [0.55, 'rgba(255,138,61,0.9)', 2]].forEach(([k, col, lw]) => {
+    const pts = CUBE_V.map(v => pr(v.map(c => c * k)));
+    ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.shadowColor = col; ctx.shadowBlur = 18;
+    CUBE_E.forEach(([i, j]) => { ctx.beginPath(); ctx.moveTo(pts[i][0], pts[i][1]); ctx.lineTo(pts[j][0], pts[j][1]); ctx.stroke(); });
+    ctx.fillStyle = '#eaffff'; pts.forEach(p => { ctx.beginPath(); ctx.arc(p[0], p[1], 3.2, 0, 6.283); ctx.fill(); });
+  });
+  ctx.restore();
+}
+const tl = document.createElement('canvas'); tl.width = W; tl.height = H; const tg = tl.getContext('2d');
+const TT = 1.05, TYC = 470;
+function drawTitle(t) {
+  const k = prog(t, TT - 0.1, TT + 0.5); if (k <= 0) return;
+  tg.setTransform(1, 0, 0, 1, 0, 0); tg.clearRect(0, 0, W, H);
+  // backing
+  const bk = g.createRadialGradient(W / 2, TYC, 20, W / 2, TYC, 900); bk.addColorStop(0, `rgba(1,6,12,${0.55 * easeOut(k)})`); bk.addColorStop(1, 'rgba(1,6,12,0)');
+  g.fillStyle = bk; g.fillRect(0, 0, W, H);
+  tg.font = 'italic 900 230px "Avenir Next"'; tg.textBaseline = 'alphabetic';
+  const w3d = tg.measureText('3D').width;
+  tg.font = '700 168px "Source Han Sans SC"'; const zh = '战术解读', sp = 14;
+  const wzh = [...zh].reduce((a, ch) => a + tg.measureText(ch).width, 0) + sp * 3;
+  const cube = 190, gap1 = 70, gap2 = 64;
+  const total = cube + gap1 + w3d + gap2 + wzh;
+  let x = W / 2 - total / 2; const base = TYC + 78;
+  // cube
+  const ck = easeBack(prog(t, TT - 0.1, TT + 0.35));
+  if (ck > 0) drawCubeOn(x + cube / 2, TYC, 78 * ck, t, clamp(ck));
+  x += cube + gap1;
+  // "3D": stroke draw then fill
+  tg.save(); tg.font = 'italic 900 230px "Avenir Next"';
+  const dk = easeInOut(prog(t, TT, TT + 0.45));
+  tg.setLineDash([1400, 1400]); tg.lineDashOffset = 1400 * (1 - dk);
+  tg.strokeStyle = '#bff4ff'; tg.lineWidth = 4; tg.shadowColor = CYAN; tg.shadowBlur = 24; tg.strokeText('3D', x, base);
+  tg.setLineDash([]);
+  const fk = easeOut(prog(t, TT + 0.3, TT + 0.65));
+  if (fk > 0) { const gr = tg.createLinearGradient(0, base - 190, 0, base); gr.addColorStop(0, '#ffffff'); gr.addColorStop(1, '#5fe3ff'); tg.globalAlpha = fk; tg.fillStyle = gr; tg.shadowBlur = 40; tg.fillText('3D', x, base); }
+  tg.restore();
+  x += w3d + gap2 / 2;
+  // divider
+  const dv = easeOut(prog(t, TT + 0.25, TT + 0.6));
+  if (dv > 0) { tg.save(); tg.strokeStyle = 'rgba(160,235,255,0.8)'; tg.lineWidth = 3; tg.shadowColor = CYAN; tg.shadowBlur = 10; tg.beginPath(); tg.moveTo(x, TYC - 95 * dv); tg.lineTo(x, TYC + 95 * dv); tg.stroke(); tg.restore(); }
+  x += gap2 / 2;
+  // 战术解读: per-character rise + skew
+  tg.save(); tg.font = '700 168px "Source Han Sans SC"';
+  let cx = x;
+  [...zh].forEach((ch, i) => {
+    const ak = easeOut(prog(t, TT + 0.3 + i * 0.08, TT + 0.62 + i * 0.08));
+    const cw = tg.measureText(ch).width;
+    if (ak > 0) {
+      tg.save(); tg.globalAlpha = ak; tg.translate(cx, base + (1 - ak) * 60); tg.transform(1, 0, -0.14, 1, 0, 0);
+      const gr = tg.createLinearGradient(0, -160, 0, 0); gr.addColorStop(0, '#ffffff'); gr.addColorStop(1, '#cfefff');
+      tg.fillStyle = gr; tg.shadowColor = 'rgba(63,224,255,0.75)'; tg.shadowBlur = 26; tg.fillText(ch, 0, -6);
+      tg.restore();
+    }
+    cx += cw + sp;
+  });
+  tg.restore();
+  // english line
+  const en = '3D  TACTICAL  BREAKDOWN', ek = clamp((t - (TT + 0.7)) / 0.5);
+  if (ek > 0) {
+    tg.save(); tg.font = '600 34px "Avenir Next"'; tg.textBaseline = 'middle';
+    const s = en.slice(0, Math.ceil(en.length * ek)); const spc = 10;
+    const ew = [...en].reduce((a, ch) => a + tg.measureText(ch).width, 0) + spc * (en.length - 1);
+    const ecx = W / 2 + (cube + gap1) / 2; let ex = ecx - ew / 2; const ey = TYC + 150;
+    tg.fillStyle = 'rgba(160,235,255,0.9)'; tg.shadowColor = CYAN; tg.shadowBlur = 10;
+    for (const ch of s) { tg.fillText(ch, ex, ey); ex += tg.measureText(ch).width + spc; }
+    tg.strokeStyle = 'rgba(160,235,255,0.6)'; tg.lineWidth = 2; const ll = 120 * ek;
+    tg.beginPath(); tg.moveTo(ecx - ew / 2 - 30, ey); tg.lineTo(ecx - ew / 2 - 30 - ll, ey); tg.moveTo(ecx + ew / 2 + 30, ey); tg.lineTo(ecx + ew / 2 + 30 + ll, ey); tg.stroke();
+    tg.restore();
+  }
+  // light sweep across the title layer (synced to "回看")
+  const sk = prog(t, 2.5, 3.2);
+  if (sk > 0 && sk < 1) {
+    tg.save(); tg.globalCompositeOperation = 'source-atop';
+    const sx = lerp(W / 2 - total / 2 - 300, W / 2 + total / 2 + 300, easeInOut(sk));
+    const sg2 = tg.createLinearGradient(sx - 140, 0, sx + 140, 0); sg2.addColorStop(0, 'rgba(255,255,255,0)'); sg2.addColorStop(0.5, 'rgba(255,255,255,0.9)'); sg2.addColorStop(1, 'rgba(255,255,255,0)');
+    tg.fillStyle = sg2; tg.fillRect(0, TYC - 200, W, 400); tg.restore();
+  }
+  // push-through at the end
+  const pk = easeIn(prog(t, 3.55, 4.25));
+  g.save();
+  g.translate(W / 2, TYC); g.scale(1 + 2.2 * pk, 1 + 2.2 * pk); g.translate(-W / 2, -TYC);
+  g.globalAlpha = 1 - pk; g.filter = pk > 0 ? `blur(${pk * 14}px)` : 'none';
+  g.drawImage(tl, 0, 0);
+  g.restore();
+}
+function drawCubeOn(cx, cy, size, t, a) { drawCube(tg, cx, cy, size, t, a); }
+window.render = function (t) {
+  setCam(t);
+  g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; g.filter = 'none';
+  const bgk = easeOut(prog(t, 0.5, 1.6));
+  const gr = g.createRadialGradient(W / 2, H * 0.55, 50, W / 2, H * 0.55, W * 0.75);
+  gr.addColorStop(0, '#0b2233'); gr.addColorStop(0.55, '#06121d'); gr.addColorStop(1, '#010409');
+  g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  drawFloorGrid(t); drawCourtLines(t);
+  drawFreeze(t);
+  drawParts(t);
+  drawTitle(t);
+  // impact flash when the title lands
+  const fl = prog(t, TT + 0.3, TT + 0.5); if (fl > 0 && fl < 1) { g.fillStyle = `rgba(200,245,255,${0.25 * (1 - fl)})`; g.fillRect(0, 0, W, H); }
+  const vg = g.createRadialGradient(W / 2, H / 2, H * 0.45, W / 2, H / 2, W * 0.72); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, `rgba(0,0,0,${0.6 * bgk})`); g.fillStyle = vg; g.fillRect(0, 0, W, H);
+  // freeze flash at t=0
+  const f0 = prog(t, 0, 0.12); if (f0 < 1) { g.fillStyle = `rgba(220,250,255,${0.5 * (1 - f0)})`; g.fillRect(0, 0, W, H); }
+  // final whiteout into the 3D scene
+  const wo = easeIn(prog(t, 3.9, 4.4)); if (wo > 0) { g.fillStyle = `rgba(230,250,255,${wo})`; g.fillRect(0, 0, W, H); }
+  return true;
+};
+window.ready = () => Promise.all([...document.images].map(im => im.complete ? 1 : new Promise(r => im.onload = r))).then(() => Promise.all(['italic 900 230px "Avenir Next"','600 34px "Avenir Next"','700 168px "Source Han Sans SC"'].map(f => document.fonts.load(f, '3D战术解读')))).then(() => document.fonts.ready).then(() => buildHolo());
+</script></body></html>

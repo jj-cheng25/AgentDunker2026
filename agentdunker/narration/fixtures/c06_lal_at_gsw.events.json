@@ -1,0 +1,16 @@
+{
+ "_source": "Hand-written minimal fixture from 2 fps contact sheets of bench clip c06_lal_at_gsw_curry.mp4 (source time). Identity of #30 read from the jersey close-up (CURRY 30). Three-pointer from scoreboard GS 8 -> 11. No xFG on purpose.",
+ "duration": 14.77,
+ "players": {"30": {"jersey": "30", "team_abbr": "GSW", "name": "Stephen Curry", "name_zh": "斯蒂芬·库里", "conf": 0.9}},
+ "shot": {"release_t": 9.8, "shooter_track": 30, "made": true, "points": 3, "xfg": null},
+ "events": [
+  {"t": 0.3, "type": "other", "actors": [], "conf": 0.8, "note": "opponents (gold jerseys) run half-court offense, home defense (white) set"},
+  {"t": 3.0, "type": "drive", "actors": [], "conf": 0.6, "note": "opponent drives into the paint, help defenders collapse"},
+  {"t": 5.4, "type": "other", "actors": [], "conf": 0.6, "note": "ball comes loose and the defense recovers it, possession changes"},
+  {"t": 6.4, "type": "drive", "actors": [30], "conf": 0.7, "note": "push in transition up the floor"},
+  {"t": 8.6, "type": "other", "actors": [30], "conf": 0.6, "note": "settles on the right wing behind the arc, defenders scrambling back"},
+  {"t": 9.8, "type": "shot", "actors": [30], "conf": 0.8, "note": "pull-up three over a late closeout"},
+  {"t": 11.0, "type": "other", "actors": [30], "conf": 0.8, "note": "ball drops through, crowd erupts"},
+  {"t": 12.3, "type": "other", "actors": [30], "conf": 0.8, "note": "close-up: shooter celebrates, holds up three fingers"}
+ ]
+}

@@ -1,0 +1,38 @@
+{
+ "_source": "Reference body (AgentDunker_final_with_cover_76.8s.mp4, 6.0-70.8 s) in body time. Section bounds and shot/bank times from the voice-kit TIMELINE.md key-node table; other event times from the reference narration timeline (redub final_timeline.srt), per the M6 brief. Notes are English action descriptions, not the reference wording.",
+ "duration": 64.8,
+ "sections": [
+  {"start": 0.0, "end": 21.967, "kind": "live"},
+  {"start": 21.967, "end": 26.8, "kind": "bridge"},
+  {"start": 26.8, "end": 52.8, "kind": "replay"},
+  {"start": 52.8, "end": 58.0, "kind": "freeze"},
+  {"start": 58.0, "end": 64.8, "kind": "resume"}
+ ],
+ "players": {
+  "7": {"jersey": "7", "team_abbr": "HOU", "name": "Kevin Durant", "name_zh": "凯文·杜兰特", "conf": 0.95},
+  "10": {"jersey": "10", "team_abbr": "HOU", "name": "Jabari Smith Jr.", "name_zh": "贾巴里·史密斯", "conf": 0.9}
+ },
+ "shot": {"release_t": 58.0, "shooter_track": 7, "made": true, "xfg": 0.213},
+ "events": [
+  {"t": 0.2, "type": "other", "actors": [7], "conf": 0.9, "note": "ball handler sizes up a single defender on the left wing, isolation"},
+  {"t": 4.2, "type": "other", "actors": [], "conf": 0.8, "note": "teammates clear out to the weak side, emptying the strong side"},
+  {"t": 8.3, "type": "pass", "actors": [7], "conf": 0.9, "note": "ball swung back to the ball handler, who holds and reads the defense"},
+  {"t": 12.2, "type": "drive", "actors": [7], "conf": 0.9, "note": "change of direction on the left side, accelerates"},
+  {"t": 15.6, "type": "drive", "actors": [7], "conf": 0.9, "note": "beats the first defender"},
+  {"t": 16.55, "type": "shot", "actors": [7], "conf": 0.9, "note": "drifting floater off the glass into help defense"},
+  {"t": 18.3, "type": "other", "actors": [7], "conf": 0.9, "note": "ball goes in"},
+  {"t": 20.5, "type": "other", "actors": [7], "conf": 0.8, "note": "shooter falls to the floor, a teammate pulls him up"},
+  {"t": 29.75, "type": "screen", "actors": [10], "conf": 0.85, "note": "3D replay: wing curls off a screen and catches"},
+  {"t": 32.75, "type": "other", "actors": [], "conf": 0.8, "note": "defender closes out hard on the catch"},
+  {"t": 35.15, "type": "pass", "actors": [10, 7], "conf": 0.85, "note": "kick back to the star, offense resets"},
+  {"t": 37.2, "type": "other", "actors": [], "conf": 0.8, "note": "teammates spread to both corners, top of the floor emptied for an isolation"},
+  {"t": 42.4, "type": "drive", "actors": [7], "conf": 0.85, "note": "first step does not get past the defender"},
+  {"t": 43.95, "type": "other", "actors": [7], "conf": 0.85, "note": "pulls the ball back out, looks for a second move"},
+  {"t": 46.9, "type": "drive", "actors": [7], "conf": 0.85, "note": "attacks again"},
+  {"t": 49.75, "type": "drive", "actors": [7], "conf": 0.85, "note": "drives toward the rim, help defense collapses into the paint"},
+  {"t": 53.0, "type": "shot", "actors": [7], "conf": 0.9, "note": "freeze frame at the release; official shot-quality card shown"},
+  {"t": 57.4, "type": "other", "actors": [7], "conf": 0.85, "note": "release over a contesting defender"},
+  {"t": 59.7, "type": "shot", "actors": [7], "conf": 0.9, "note": "ball banks off the glass and drops"},
+  {"t": 60.6, "type": "other", "actors": [7], "conf": 0.8, "note": "replay of a tough, contested finish; wrap-up"}
+ ]
+}

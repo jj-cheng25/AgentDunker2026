@@ -1,0 +1,15 @@
+{
+ "_source": "Hand-written minimal fixture from 2 fps contact sheets of bench clip c02_dal_at_hou_flagg.mp4 (source time). No identities on purpose: tests that no names are invented. Shot result from scoreboard (DAL 103 unchanged, shot clock reset to 24).",
+ "duration": 20.0,
+ "shot": {"release_t": 16.4, "made": false, "xfg": null},
+ "events": [
+  {"t": 0.3, "type": "other", "actors": [], "conf": 0.8, "note": "offense (dark jerseys) brings the ball across half court, late 4th quarter, close game"},
+  {"t": 4.0, "type": "other", "actors": [], "conf": 0.7, "note": "half-court set, ball handler probes at the top of the key"},
+  {"t": 9.2, "type": "drive", "actors": [1], "conf": 0.7, "note": "ball handler drives left toward the paint, defense sinks"},
+  {"t": 11.0, "type": "pass", "actors": [1], "conf": 0.6, "note": "kick-out to the perimeter"},
+  {"t": 13.0, "type": "pass", "actors": [], "conf": 0.6, "note": "ball swung around the arc, defense rotating"},
+  {"t": 15.4, "type": "drive", "actors": [], "conf": 0.6, "note": "attack into the lane against a set defense"},
+  {"t": 16.4, "type": "shot", "actors": [], "conf": 0.7, "note": "contested shot in the paint over two defenders"},
+  {"t": 17.6, "type": "rebound", "actors": [], "conf": 0.7, "note": "shot misses, defense secures the rebound and pushes the other way"}
+ ]
+}

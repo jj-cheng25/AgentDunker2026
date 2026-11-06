@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentdunker"
+version = "0.1.0"
+description = "NBA broadcast clip in, narrated holographic 3D tactical breakdown film out — fully automatic."
+readme = "README_en.md"
+requires-python = ">=3.10"
+license = { text = "AGPL-3.0-only" }
+authors = [{ name = "AgentDunker team (Fudan University × Shanghai Innovation Institute × MOSI)" }]
+keywords = ["basketball", "nba", "sports analytics", "tracking", "3d", "video", "commentary", "agent"]
+classifiers = [
+  "License :: OSI Approved :: GNU Affero General Public License v3",
+  "Programming Language :: Python :: 3",
+  "Topic :: Multimedia :: Video",
+  "Topic :: Scientific/Engineering :: Image Recognition",
+]
+# One environment for every stage. CPU by default; a CUDA GPU is used automatically when torch sees one.
+dependencies = [
+  "numpy>=1.26,<3",
+  "opencv-python>=4.9",
+  "torch>=2.2",
+  "torchvision>=0.17",
+  "ultralytics>=8.4,<8.5",          # YOLO11 + BoT-SORT internals (AGPL-3.0)
+  "lap>=0.5.12",
+  "onnxruntime>=1.17",
+  "transformers>=4.40,<5",
+  "huggingface_hub>=0.23",
+  "scikit-learn>=1.4",
+  "scipy>=1.11",
+  "networkx>=3.2",
+  "av>=12",
+  "pillow>=10",
+  "requests>=2.31",
+  "websocket-client>=1.7",
+  "soundfile>=0.12",
+  "librosa>=0.10",
+  "pypinyin>=0.50",
+  "pyloudnorm>=0.1.1",
+  "playwright>=1.44",
+  "gdown>=5",
+]
+
+[project.optional-dependencies]
+gpu = ["onnxruntime-gpu>=1.17"]
+ui = ["gradio>=4.40"]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[project.scripts]
+agentdunker = "agentdunker.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/jj-cheng25/AgentDunker2026"
+
+[tool.setuptools.packages.find]
+include = ["agentdunker*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.json", "*.md", "*.txt", "*.html", "*.js", "*.css", "LICENSE", "*_LICENSE", "web/**/*", "assets/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "agentdunker"]
+markers = ["slow: needs weights and Chromium (skipped in CI)"]
+
+[tool.ruff]
+line-length = 130
+target-version = "py310"
+extend-exclude = ["agentdunker/tracking", "agentdunker/court", "agentdunker/identity", "agentdunker/replay",
+                  "agentdunker/events", "agentdunker/narration", "agentdunker/film"]   # synced code: lint upstream
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B"]
+ignore = ["E741", "B008"]
