@@ -45,7 +45,7 @@ def doctor(verify: bool = False, ping: bool = False) -> int:
     config.apply()
     ok = True
     print(f"agentdunker doctor · Python {platform.python_version()} · {platform.system()} {platform.machine()}")
-    ok &= _line(sys.version_info >= (3, 10), "python ≥ 3.10", sys.version.split()[0])
+    ok &= _line(sys.version_info >= (3, 11), "python ≥ 3.11", sys.version.split()[0])
     for mod, pip, why in PACKAGES:
         try:
             m = importlib.import_module(mod)
