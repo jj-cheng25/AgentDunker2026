@@ -7,7 +7,7 @@ name = "agentdunker"
 version = "0.1.0"
 description = "NBA broadcast clip in, narrated holographic 3D tactical breakdown film out — fully automatic."
 readme = "README_en.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = { text = "AGPL-3.0-only" }
 authors = [{ name = "AgentDunker team (Shanghai Innovation Institute × Fudan University × MOSI)" }]
 keywords = ["basketball", "nba", "sports analytics", "tracking", "3d", "video", "commentary", "agent"]
@@ -66,7 +66,7 @@ markers = ["slow: needs weights and Chromium (skipped in CI)"]
 
 [tool.ruff]
 line-length = 140
-target-version = "py310"
+target-version = "py311"
 extend-exclude = ["agentdunker/tracking", "agentdunker/court", "agentdunker/identity", "agentdunker/replay",
                   "agentdunker/events", "agentdunker/narration", "agentdunker/film"]   # synced code: lint upstream
 

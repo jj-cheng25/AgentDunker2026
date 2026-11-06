@@ -11,12 +11,11 @@ from __future__ import annotations
 
 import copy
 import os
+import tomllib
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Optional
-
-import tomllib
 
 HOME_CACHE = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "agentdunker"
 
