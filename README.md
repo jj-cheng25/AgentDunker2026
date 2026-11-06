@@ -1,11 +1,16 @@
 # AgentDunker
 
+<!-- DEMO-START -->
+[![AgentDunker 成片封面：杜兰特打板命中的 3D 战术复盘](docs/media/cover.jpg)](https://github.com/jj-cheng25/AgentDunker2026/releases/tag/demo-durant)
+
+▶ **[观看完整 1080p 成片（GitHub Release：demo-durant）](https://github.com/jj-cheng25/AgentDunker2026/releases/tag/demo-durant)**
+
+<!-- INLINE-PLAYER: 在这里粘贴 github.com/user-attachments/assets/... 视频链接（单独一行，GitHub 会渲染成内嵌播放器） -->
+<!-- DEMO-END -->
+
 **给一段 NBA 转播进攻片段，全自动生成带激情中文解说的“十人全息 3D 战术复盘”短片。**
 
 [English](README_en.md) · [架构](docs/architecture.md) · [数据合同](docs/contracts.md) · [配置](docs/configuration.md) · [性能](docs/performance.md)
-
-<!-- DEMO: 成片截图 / 动图。素材含 NBA 转播画面，版权策略确定前先放占位（见 RELEASE_CHECKLIST.md）。 -->
-> 🎬 *演示动图占位* — 片头 → 实拍 + 球员铭牌 → “3D 战术解读”转场 → 十人全息 3D 复盘 → 出手定格（投篮人聚光、球路、官方 xFG 卡）→ 恢复播放、进球光波 → 片尾
 
 ## 它做什么
 
@@ -93,6 +98,6 @@ flowchart LR
 
 ## 致谢
 
-复旦大学 · 上海创智学院 · MOSI 模思。Mosshub 和 MOSS（TTS / ASR / MOSS-VL）提供模型服务；感谢 Ultralytics、torchreid、OpenAI CLIP、DEIM、three.js 和 Google Fonts 等开源项目。
+上海创智学院 · 复旦大学 · MOSI 模思。Mosshub 和 MOSS（TTS / ASR / MOSS-VL）提供模型服务；感谢 Ultralytics、torchreid、OpenAI CLIP、DEIM、three.js 和 Google Fonts 等开源项目。
 
 参与贡献见 [CONTRIBUTING.md](CONTRIBUTING.md)。

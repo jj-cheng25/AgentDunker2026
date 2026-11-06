@@ -1,11 +1,16 @@
 # AgentDunker
 
+<!-- DEMO-START -->
+[![AgentDunker film cover: a 3D tactical breakdown of a Kevin Durant bank shot](docs/media/cover.jpg)](https://github.com/jj-cheng25/AgentDunker2026/releases/tag/demo-durant)
+
+▶ **[Watch the full 1080p film (GitHub Release: demo-durant)](https://github.com/jj-cheng25/AgentDunker2026/releases/tag/demo-durant)**
+
+<!-- INLINE-PLAYER: paste the github.com/user-attachments/assets/... video URL here, on its own line (GitHub renders it as an inline player) -->
+<!-- DEMO-END -->
+
 **Give it a 5–20 s NBA broadcast possession; get back a narrated breakdown film with a ten-player holographic 3D tactical replay — fully automatic.**
 
 [中文](README.md) · [Architecture](docs/architecture.md) · [Data contracts](docs/contracts.md) · [Configuration](docs/configuration.md) · [Performance](docs/performance.md)
-
-<!-- DEMO: film stills / GIF. They contain NBA broadcast footage: placeholder until the asset policy is decided (RELEASE_CHECKLIST.md). -->
-> 🎬 *demo GIF placeholder* — intro → live play with player nameplates → "3D 战术解读" transition → ten-player holographic 3D replay → shot freeze (shooter spotlight, ball path, official xFG card) → resume with made-shot light wave → outro
 
 ## What it does
 
@@ -111,7 +116,7 @@ component, model, font, dataset and service is listed in [THIRD_PARTY_NOTICES.md
 
 ## Acknowledgements
 
-Fudan University · Shanghai Innovation Institute · MOSI. Model services by Mosshub and MOSS (TTS / ASR / MOSS-VL).
+Shanghai Innovation Institute · Fudan University · MOSI. Model services by Mosshub and MOSS (TTS / ASR / MOSS-VL).
 Built on Ultralytics, torchreid, OpenAI CLIP, DEIM, three.js, Google Fonts and many other open-source projects.
 
 Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).
