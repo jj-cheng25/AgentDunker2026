@@ -123,6 +123,7 @@ const tactics = new TacticsLayer(play, timeline, solver, shared, COLORS,
 scene.add(tactics.group);
 
 $('title').textContent = play.title;
+for (let px = 22; $('title').scrollWidth > $('title').clientWidth && px > 14; ) $('title').style.fontSize = `${--px}px`;
 const legendLabels = paletteLabels(play);
 for (const key of ['off','def'])
   document.querySelector(`[data-palette-label="${key}"]`).textContent = legendLabels[key];

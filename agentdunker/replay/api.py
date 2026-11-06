@@ -22,7 +22,7 @@ def make_replay(video: str, tracks: str, court: str, out: str, *, identity: Opti
                 compare_out: Optional[str] = None, width: int = 1920, height: int = 1080, fps: int = 30,
                 workers: int = 3, pip: bool = True, max_seconds: Optional[float] = None,
                 cfg: SceneConfig = SceneConfig(), timeline: Optional[list] = None,
-                annotations: Optional[str] = None) -> dict:
+                annotations: Optional[str] = None, title: Optional[str] = None) -> dict:
     """Build the scene and render it. Always writes ``<out>.json``; ``report['ok']`` is False when
     there is no usable 3D window (the caller then skips the 3D segment instead of failing)."""
     t0 = time.monotonic()
@@ -35,7 +35,7 @@ def make_replay(video: str, tracks: str, court: str, out: str, *, identity: Opti
             ann = []
             logger.warning("unreadable annotations %s (%s)", annotations, e)
     play, report = build_play(tr, co, _load(identity), _load(events), start, end, cfg, timeline=timeline,
-                              annotations=ann)
+                              annotations=ann, title=title)
     report["inputs"] = {"video": video, "tracks": tracks, "court": court, "identity": identity, "events": events}
     out_p = Path(out)
     out_p.parent.mkdir(parents=True, exist_ok=True)
