@@ -25,7 +25,7 @@ https://github.com/user-attachments/assets/daae0661-46ec-4bcc-ac1b-9dedd5bc3615
 
 ## Highlights
 
-<img src="docs/media/features_en.svg" width="100%" alt="Ten-player holographic 3D; voiced Chinese play-by-play; always a film, graded A/B/C; runs with zero API keys">
+<img src="docs/media/features_en.svg" width="100%" alt="Ten-player holographic 3D; voiced Chinese play-by-play; always a film, graded A/B/C; works without API keys">
 
 **No manual steps**: detect and track the ten players and the referees, calibrate the court, read jersey numbers and
 match the game, find the release and the ball path, render a 3D replay phase by phase, write and voice the
