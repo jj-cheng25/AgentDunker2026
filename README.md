@@ -1,11 +1,9 @@
 # AgentDunker
 
 <!-- DEMO-START -->
-[![AgentDunker 成片封面：杜兰特打板命中的 3D 战术复盘](docs/media/cover.jpg)](https://github.com/jj-cheng25/AgentDunker2026/releases/tag/demo-durant)
+https://github.com/user-attachments/assets/daae0661-46ec-4bcc-ac1b-9dedd5bc3615
 
 ▶ **[观看完整 1080p 成片（GitHub Release：demo-durant）](https://github.com/jj-cheng25/AgentDunker2026/releases/tag/demo-durant)**
-
-<!-- INLINE-PLAYER: 在这里粘贴 github.com/user-attachments/assets/... 视频链接（单独一行，GitHub 会渲染成内嵌播放器） -->
 <!-- DEMO-END -->
 
 **给一段 NBA 转播进攻片段，全自动生成带激情中文解说的“十人全息 3D 战术复盘”短片。**

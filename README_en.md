@@ -1,11 +1,9 @@
 # AgentDunker
 
 <!-- DEMO-START -->
-[![AgentDunker film cover: a 3D tactical breakdown of a Kevin Durant bank shot](docs/media/cover.jpg)](https://github.com/jj-cheng25/AgentDunker2026/releases/tag/demo-durant)
+https://github.com/user-attachments/assets/daae0661-46ec-4bcc-ac1b-9dedd5bc3615
 
 ▶ **[Watch the full 1080p film (GitHub Release: demo-durant)](https://github.com/jj-cheng25/AgentDunker2026/releases/tag/demo-durant)**
-
-<!-- INLINE-PLAYER: paste the github.com/user-attachments/assets/... video URL here, on its own line (GitHub renders it as an inline player) -->
 <!-- DEMO-END -->
 
 **Give it a 5–20 s NBA broadcast possession; get back a narrated breakdown film with a ten-player holographic 3D tactical replay — fully automatic.**
