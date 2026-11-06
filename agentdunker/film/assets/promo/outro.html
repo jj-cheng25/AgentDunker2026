@@ -270,8 +270,8 @@ function drawBrackets(t) {
 }
 function drawLogos(t) {
   const k = easeOut(prog(t, 2.2, 2.8)); if (k <= 0) return;
-  const imgs = [document.getElementById('lf'), document.getElementById('ls'), document.getElementById('lm')];
-  const hs = [62, 62, 40];
+  const imgs = [document.getElementById('ls'), document.getElementById('lf'), document.getElementById('lm')];  // SII, Fudan, MOSI
+  const hs = [62, 62, 40];                                                                                    // ls, lf, lm
   const ws = imgs.map((im, i) => im.naturalWidth * hs[i] / im.naturalHeight);
   const gap = 70, xw = 26; const total = ws.reduce((a, b) => a + b, 0) + 2 * (gap * 2 + xw);
   const yc = H - 128 + (1 - k) * 30;
