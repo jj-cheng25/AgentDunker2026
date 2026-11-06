@@ -1,25 +1,43 @@
-# AgentDunker
+<div align="center">
+
+<p><img src="docs/media/hero_en.svg" width="100%" alt="AgentDunker: AI basketball commentary and visualization agent"></p>
+
+<p>
+<a href="LICENSE"><img alt="license AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-ff8a3d?style=flat-square&labelColor=0b2233"></a>
+<img alt="python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-3fe0ff?style=flat-square&labelColor=0b2233&logo=python&logoColor=white">
+<img alt="runs on CPU" src="https://img.shields.io/badge/runs_on-CPU-3fe0ff?style=flat-square&labelColor=0b2233">
+<img alt="offline mode" src="https://img.shields.io/badge/offline-ready-3fe0ff?style=flat-square&labelColor=0b2233">
+<img alt="3D Three.js" src="https://img.shields.io/badge/3D-Three.js-3fe0ff?style=flat-square&labelColor=0b2233&logo=threedotjs&logoColor=white">
+<a href="https://github.com/jj-cheng25/AgentDunker2026/stargazers"><img alt="stars" src="https://img.shields.io/github/stars/jj-cheng25/AgentDunker2026?style=flat-square&labelColor=0b2233&color=ff8a3d&logo=github"></a>
+</p>
+
+**Give it a 5–20 s NBA broadcast possession; get back a narrated breakdown film with a ten-player holographic 3D tactical replay — fully automatic.**
+
+[中文](README.md) · [Quick start](#quick-start) · [How it works](#how-it-works) · [Benchmark](#benchmark) · [Architecture](docs/architecture.md) · [Data contracts](docs/contracts.md) · [Configuration](docs/configuration.md)
+
+</div>
 
 <!-- DEMO-START -->
 https://github.com/user-attachments/assets/daae0661-46ec-4bcc-ac1b-9dedd5bc3615
 
-▶ **[Watch the full 1080p film (GitHub Release: demo-durant)](https://github.com/jj-cheng25/AgentDunker2026/releases/tag/demo-durant)**
+<p align="center">▶ <b><a href="https://github.com/jj-cheng25/AgentDunker2026/releases/tag/demo-durant">Watch the full 1080p film (GitHub Release: demo-durant)</a></b></p>
 <!-- DEMO-END -->
 
-**Give it a 5–20 s NBA broadcast possession; get back a narrated breakdown film with a ten-player holographic 3D tactical replay — fully automatic.**
+## Highlights
 
-[中文](README.md) · [Architecture](docs/architecture.md) · [Data contracts](docs/contracts.md) · [Configuration](docs/configuration.md) · [Performance](docs/performance.md)
+<img src="docs/media/features_en.svg" width="100%" alt="Ten-player holographic 3D; voiced Chinese play-by-play; always a film, graded A/B/C; runs with zero API keys">
 
-## What it does
+**No manual steps**: detect and track the ten players and the referees, calibrate the court, read jersey numbers and
+match the game, find the release and the ball path, render a 3D replay phase by phase, write and voice the
+commentary, and cut it all into one film. When a step is unsure it degrades its element (fewer nameplates, no xFG
+card, no 3D …) instead of failing the run; `report.json` gives every element a tier (A full / B degraded / C omitted)
+and the reason.
 
-No manual steps: detect and track the ten players and the referees, calibrate the court, read jersey numbers and
-match the game, find the release and the ball path, render a 3D replay phase by phase, write and voice Chinese
-commentary, and cut it all into one film.
+## Holographic tactical replay
 
-**Always a film, quality in tiers.** When a step is unsure it degrades its element (fewer nameplates, no xFG card,
-no 3D …) instead of failing the run. `report.json` gives every element a tier (A full / B degraded / C omitted) and
-the reason. It also works with **no API keys at all**: commentary becomes template subtitles and the VLM steps use
-local rules.
+<img src="docs/media/replay.webp" width="100%" alt="3D tactical replay: holographic players, tactical phase card and top-down tactics board">
+
+<p align="center"><sub>The 3D section of the demo film: ten holographic players, the tactical phase card, the top-down board and line-by-line subtitles (the broadcast picture-in-picture is masked; this repository contains no NBA footage)</sub></p>
 
 ## Quick start
 
@@ -35,8 +53,22 @@ agentdunker run clip.mp4 -o out/      # → out/film.mp4 + out/report.json
 
 Needs `ffmpeg` ≥ 6 with libx264 on the PATH.
 
-**Model services (optional).** Defaults: Mosshub (gemini-3.8-flash, gpt-6-astra) and MOSS (TTS/ASR with the
-Mossland commentary voice, MOSS-VL):
+<table>
+<tr><th align="left">command</th><th align="left"></th></tr>
+<tr><td><code>agentdunker run CLIP -o OUT [--preset fast|quality] [--threads N]</code></td><td>make the film, with per-step progress and timing; a re-run resumes from <code>OUT/work/</code></td></tr>
+<tr><td><code>agentdunker doctor</code></td><td>Python packages, ffmpeg, Chromium, weights, API keys, official data</td></tr>
+<tr><td><code>agentdunker download-models</code></td><td>weights, fonts, CLIP and Chromium, with source URL, sha256 and licence</td></tr>
+<tr><td><code>agentdunker ui</code></td><td>local web page: upload, progress, preview, download (<code>pip install -e '.[ui]'</code>)</td></tr>
+</table>
+
+From Python: `from agentdunker import make_film; make_film("clip.mp4", "out/")`.
+
+<details>
+<summary><b>Model services (optional)</b>: Mosshub · MOSS · OpenAI-compatible · Gemini · fully offline</summary>
+
+<br>
+
+Defaults: Mosshub (gemini-3.8-flash, gpt-6-astra) and MOSS (TTS/ASR with the Mossland commentary voice, MOSS-VL):
 
 ```bash
 export MOSSHUB_API_KEY=...   # jersey reading, role adjudication, commentary script, phase titles
@@ -45,37 +77,28 @@ export MOSS_API_KEY=...      # commentary voice + ASR read-back, MOSS-VL checks
 
 OpenAI-compatible endpoints (including local vLLM / Ollama servers) and Google's Gemini API are supported too:
 `agentdunker run clip.mp4 -o out/ --provider openai`; see [docs/configuration.md](docs/configuration.md).
-`--offline` makes no model call at all.
+`--offline` makes no model call at all: commentary becomes template subtitles and the VLM steps use local rules.
 
-| command | |
-|---|---|
-| `agentdunker run CLIP -o OUT [--preset fast\|quality] [--threads N]` | make the film, with per-step progress and timing; a re-run resumes from `OUT/work/` |
-| `agentdunker doctor` | Python packages, ffmpeg, Chromium, weights, API keys, official data |
-| `agentdunker download-models` | weights, fonts, CLIP and Chromium, with source URL, sha256 and licence |
-| `agentdunker ui` | local web page: upload, progress, preview, download (`pip install -e '.[ui]'`) |
+</details>
 
-From Python: `from agentdunker import make_film; make_film("clip.mp4", "out/")`.
+## How it works
 
-## Architecture
-
-```mermaid
-flowchart LR
-  V[broadcast clip] --> T[tracking<br/>YOLO11 + BoT-SORT + OSNet + CLIP<br/>tracks.json]
-  V --> C[court<br/>court-33 keypoints + line refinement<br/>court.json]
-  T --> I[identity<br/>jersey VLM + score bug + official PBP<br/>identity.json]
-  T & C & I --> E[events<br/>DEIM ball/rim + parabola + pose<br/>events.json]
-  T & C & I & E --> D[film.director<br/>edit plan edl.json]
-  D --> N[narration<br/>script + MOSS TTS + ASR read-back<br/>narration.json]
-  D --> R[replay<br/>Three.js holographic 3D]
-  N & R --> F[film<br/>nameplates · transition · freeze · light wave · mix<br/>film.mp4 + report.json]
-```
+<img src="docs/media/pipeline_en.svg" width="100%" alt="Pipeline: broadcast clip → tracking / court / identity / shot events → edit plan → narration and holographic 3D → the film">
 
 Geometry is done by dedicated models; VLMs only make small, checkable judgements (read a number, read the score
 bug, answer a multiple-choice check). Stages exchange only the JSON in [docs/contracts.md](docs/contracts.md)
-(court coordinates in feet, origin at centre court). Stages run in one process by default; `--isolate` runs each
-in its own subprocess.
+(court coordinates in feet, origin at centre court). Audio first: once the lines are written, the 3D replay is
+paced to them. Stages run in one process by default; `--isolate` runs each in its own subprocess. More in
+[docs/architecture.md](docs/architecture.md).
 
-## Module metrics (14-clip hand-checked benchmark, 2026-10-27)
+## Benchmark
+
+<img src="docs/media/metrics_en.svg" width="100%" alt="14 hand-checked clips: tracking recall 0.920, keypoint error 5.5 px, jersey accuracy 91.2 %, make/miss 14/14, ten players in 3D 10/10, ASR read-back CER 0 %">
+
+<details>
+<summary>All numbers</summary>
+
+<br>
 
 | module | metric | result |
 |---|---|---|
@@ -86,15 +109,19 @@ in its own subprocess.
 | replay | ten players on court for the whole 3D window | c01, c14: 10/10 throughout, no jitter or teleports |
 | narration | every line spoken inside its window; whole-track ASR read-back CER | yes; 0 % (reference, c02, c06) |
 
-The benchmark clips are NBA footage and are not part of this repository.
+</details>
 
-## Performance
+Numbers come from each module's acceptance record. The benchmark clips are NBA footage and are not part of this
+repository.
 
-End-to-end time of both presets on a 16-core CPU, and what `fast` costs on the benchmark:
-[docs/performance.md](docs/performance.md). `--preset fast` uses a smaller detector (YOLO11m, 960 px, 10 Hz) and
-skips the release pose; `--threads` caps every stage.
+**Performance**: runs on a 16-core CPU with no GPU. `--preset fast` uses a smaller detector (YOLO11m, detection at
+10 Hz); `--threads` caps every stage. CPU `quality` takes tens of minutes per 20 s clip. The GPU is used
+automatically when present, but the GPU path has not been benchmarked yet.
 
-## Known limitations
+<details>
+<summary><b>Known limitations</b></summary>
+
+<br>
 
 - Player names, official xFG and season stats need a local copy of the official data (`paths.nba_data`), which is
   not shipped. Without it plates show numbers (or nothing) and no xFG card is drawn; nothing is invented.
@@ -102,19 +129,19 @@ skips the release pose; `--threads` caps every stage.
   reads no numbers.
 - The 3D replay needs ≥ 3 s of a calibrated wide shot; clips that are mostly close-ups skip it.
 - Offensive possessions only; Chinese commentary only; the only voice is MOSS's Mossland voice (subtitles without a key).
-- CPU `quality` takes tens of minutes per 20 s clip (see the performance page). The GPU is used automatically when
-  present, but the GPU path has not been benchmarked yet.
 - Same-team occlusions still cause ID switches (IDF1 0.85); in 3D they show as short predicted stretches (`observed=false`).
+
+</details>
 
 ## Licence
 
 **AGPL-3.0** (Ultralytics YOLO11, BoT-SORT and the court keypoint model are AGPL-3.0). Every third-party
 component, model, font, dataset and service is listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-**No NBA footage or official data is included** — never commit any.
+**No NBA footage or official data is included** — never commit any. Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Acknowledgements
 
+<img src="docs/media/footer_en.svg" width="100%" alt="Shanghai Innovation Institute × Fudan University × MOSI">
+
 Shanghai Innovation Institute · Fudan University · MOSI. Model services by Mosshub and MOSS (TTS / ASR / MOSS-VL).
 Built on Ultralytics, torchreid, OpenAI CLIP, DEIM, three.js, Google Fonts and many other open-source projects.
-
-Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).
