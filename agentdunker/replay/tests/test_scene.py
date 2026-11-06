@@ -75,3 +75,21 @@ def test_annotations_validated():
     assert play["annotations"][-1]["t"][1] == play["duration"]
     play0, rep0 = build_play(tracks, court)
     assert play0["annotations"] == [] and "annotations" not in rep0
+
+
+def test_title_option():
+    from agentdunker.replay.scene import TITLE_MAX_CHARS, clean_title
+    tracks, court = _tracks()
+    play, rep = build_play(tracks, court)
+    assert play["title"] == "3D 战术复盘" and rep["title_source"] == "default"      # unchanged without a title
+    t = "火箭客场对独行侠 · 杜兰特单打前的空间组织"
+    play, rep = build_play(tracks, court, title=f"  {t}\n")
+    assert play["title"] == t and rep["title"] == t and rep["title_source"] == "caller"
+    play, rep = build_play(tracks, court, events={"title": "事件标题"})
+    assert play["title"] == "事件标题" and rep["title_source"] == "events"
+    play, _ = build_play(tracks, court, events={"title": "事件标题"}, title="命令行标题")
+    assert play["title"] == "命令行标题"                                             # caller wins
+    play, rep = build_play(tracks, court, title="   ")
+    assert play["title"] == "3D 战术复盘" and rep["title_source"] == "default"      # blank -> default
+    long = clean_title("长" * 100)
+    assert len(long) == TITLE_MAX_CHARS and long.endswith("…")

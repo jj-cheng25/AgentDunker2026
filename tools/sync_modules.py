@@ -37,10 +37,10 @@ MODULES = {
     "m1": ("adk-cmd-m1", "4f7005f", "adk_tracking", "tracking"),
     "m2": ("adk-cmd-m2", "85772b7", "adk_court", "court"),
     "m3": ("adk-cmd-m3", "447097e", "adk_identity", "identity"),
-    "m4": ("adk-cmd-m4", "bd52595", "adk_replay", "replay"),
+    "m4": ("adk-cmd-m4", "409d019", "adk_replay", "replay"),
     "m5": ("adk-cmd-m5", "e98e145", "adk_events", "events"),
     "m6": ("adk-cmd-m6", "dc2fdba", "adk_narration", "narration"),
-    "m7": ("adk-cmd-m7", "cf8ddb8", "agentdunker", "film"),
+    "m7": ("adk-cmd-m7", "3b8bc01", "agentdunker", "film"),
 }
 
 # Development / benchmark helpers that read the private bench ($CMD) or are not used by the film.

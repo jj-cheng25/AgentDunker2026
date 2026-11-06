@@ -4,13 +4,19 @@
 python -m agentdunker.replay clip.mp4 --tracks tracks.json --court court.json \
     [--identity identity.json] [--events events.json] -o out/replay.mp4 \
     [--start S --end S] [--timeline knots.json | --timeline '[[0,4.0],[4,5.0],[5,5.0],[8,8.0]]'] \
-    [--annotations annotations.json] [--compare out/side_by_side.mp4] [--workers 3] [--width 1920 --height 1080 --fps 30] [--no-pip]
+    [--annotations annotations.json] [--title "..."] [--compare out/side_by_side.mp4] [--workers 3] [--width 1920 --height 1080 --fps 30] [--no-pip]
 ```
 
 Needs `ffmpeg` and a Chromium on PATH (`chromium`, `chromium-browser` or `google-chrome`), or set
 `ADK_CHROMIUM=/path/to/chrome` (e.g. the Playwright build: `python -m playwright install chromium`).
 Chinese labels use the bundled `agent/fonts/NotoSansSC-Regular.otf` (OFL), served to the page as a web font, so no
 system CJK font is needed; override with `ADK_CJK_FONT=/path/to/font`.
+
+`--title "..."`: top-left title of the 3D segment. Also read from a `"title"` field in the `--timeline` object
+(`{"timeline": [...], "title": "..."}`) or in events.json; precedence `--title` > timeline > events > default
+(`<off>对<def> · 3D 战术复盘`, unchanged when absent). Whitespace is collapsed, more than 48 characters is ellipsized, and the
+page shrinks the font (22→14 px) so the title never runs under the top-right panel. `replay.json` gets `title`, `title_source`
+(`caller | events | default`). `make_replay(..., title=...)`.
 
 `--annotations` (tactical graphics: screen, pass, cut, drive, help …): `{"annotations": [...], "clock": "replay"}` in the
 renderer format of the hackathon play.json (types `arrow` (path {who, t} or from/to), `zone` (circle at/r, poly points,

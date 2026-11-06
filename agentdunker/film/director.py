@@ -223,27 +223,49 @@ def phase_titles(phases: list[dict], names: dict, use_llm: bool = True, shooter:
     return f"llm {n_llm}/{len(phases)}"
 
 
+TITLE_MAX = 24          # M4 shrinks/ellipsizes long titles; the reference title is 20 characters
+
+
 def replay_title(identity: Optional[dict], names: dict, shooter: Optional[int], facts: list) -> str:
-    """3D top-left title, e.g. 火箭客场对独行侠 · 杜兰特单打前的空间组织 (every word backed by data)."""
+    """3D top-left title ``<away>客场对<home> · <possession summary>``, e.g. 火箭客场对独行侠 · 杜兰特单打前的空间组织.
+
+    The head needs M3's matched game (otherwise the two teams without home/away, or nothing); the summary is
+    built only from measured facts about the shooter's possession, ending in the shot.
+    """
     gm = (identity or {}).get("game_match") or {}
     me = names.get(shooter) or {}
     off = me.get("team_abbr")
     head = ""
-    if off and gm.get("status") == "matched" and off in (gm.get("home"), gm.get("away")):
-        opp = gm["away"] if off == gm["home"] else gm["home"]
-        if TEAM_ZH.get(off) and TEAM_ZH.get(opp):
-            head = f"{TEAM_ZH[off]}{'主场' if off == gm['home'] else '客场'}对{TEAM_ZH[opp]}"
-    who = me.get("short") or ""
-    types = {(f.type, int(f.numbers.get("holder", f.actors[0] if f.actors else -1))) for f in facts}
+    if gm.get("status") == "matched" and TEAM_ZH.get(gm.get("away") or "") and TEAM_ZH.get(gm.get("home") or ""):
+        head = f"{TEAM_ZH[gm['away']]}客场对{TEAM_ZH[gm['home']]}"
+    elif off and TEAM_ZH.get(off):
+        other = {p.get("team_abbr") for p in names.values()} - {off, None}
+        if len(other) == 1 and TEAM_ZH.get(next(iter(other))):
+            head = f"{TEAM_ZH[off]}对{TEAM_ZH[next(iter(other))]}"
+    who = label(shooter, names, "") if shooter is not None else ""
+    mine = lambda typ: [f for f in facts if f.type == typ and (                       # noqa: E731
+        int(f.numbers.get("holder", -1)) == shooter if typ == "space" else (f.actors[-1] if typ == "pass" else f.actors[0]) == shooter)]
+    last_pass = (mine("pass") or [None])[-1]
+    passer = label(last_pass.actors[0], names, "") if last_pass else ""
+    screens = [f for f in facts if f.type == "screen" and f.actors]
     if not who:
-        tail = "3D 战术复盘"
-    elif ("space", shooter) in types:
+        return f"{head} · 3D 战术复盘" if head else ""        # "" → M4 keeps its own default title
+    if mine("space"):
         tail = f"{who}单打前的空间组织"
-    elif ("drive", shooter) in types:
-        tail = f"{who}持球突破的进攻组织"
+    elif mine("cut") and last_pass and passer:
+        tail = f"{passer}传球，{who}空切接应"
+    elif mine("drive"):
+        tail = f"{who}持球突破后出手"
+    elif screens and label(screens[-1].actors[0], names, ""):
+        tail = f"{label(screens[-1].actors[0], names, '')}掩护后{who}出手"
+    elif last_pass and passer:
+        tail = f"{passer}传球，{who}出手"
     else:
         tail = f"{who}出手前的进攻组织"
-    return f"{head} · {tail}" if head else tail
+    title = f"{head} · {tail}" if head else tail
+    if len(title) > TITLE_MAX and head:
+        title = tail if len(tail) <= TITLE_MAX else head
+    return title
 
 
 # ---------------------------------------------------------------- resume

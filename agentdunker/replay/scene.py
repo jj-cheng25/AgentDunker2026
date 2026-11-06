@@ -143,11 +143,34 @@ def parse_timeline(knots) -> list[list[float]]:
     return k
 
 
+TITLE_MAX_CHARS = 48
+
+
+def clean_title(text) -> str:
+    """Single line, collapsed whitespace, at most TITLE_MAX_CHARS characters (ellipsized). '' if unusable."""
+    if not isinstance(text, str):
+        return ""
+    s = " ".join(text.split())
+    return s if len(s) <= TITLE_MAX_CHARS else s[:TITLE_MAX_CHARS - 1].rstrip() + "…"
+
+
+def _resolve_title(title, events: Optional[dict], teams: dict) -> tuple[str, str]:
+    for value, source in ((title, "caller"), ((events or {}).get("title"), "events")):
+        s = clean_title(value)
+        if s:
+            return s, source
+    if len(teams) == 2:
+        return f"{teams['off']}对{teams['def']} · 3D 战术复盘", "default"
+    return "3D 战术复盘", "default"
+
+
 def build_play(tracks: dict, court: dict, identity: Optional[dict] = None, events: Optional[dict] = None,
                start: Optional[float] = None, end: Optional[float] = None, cfg: SceneConfig = SceneConfig(),
                smooth: SmoothConfig = SmoothConfig(), timeline: Optional[list] = None,
-               annotations=None) -> tuple[Optional[dict], dict]:
+               annotations=None, title: Optional[str] = None) -> tuple[Optional[dict], dict]:
     """Return (play JSON or None, report). ``None`` means no usable 3D window (caller skips the segment).
+
+    ``title`` = top-left title (else ``events["title"]``, else the default "<off>对<def> · 3D 战术复盘").
 
     ``timeline`` = director pacing [[out_s, src_pts], ...]; it sets the window and the export clock.
     ``annotations`` = caller tactical graphics (renderer format, see annotations.py); invalid entries are dropped.
@@ -260,10 +283,8 @@ def build_play(tracks: dict, court: dict, identity: Optional[dict] = None, event
     ball, ball_note = _ball_segments(events, shooter, release, t0, t1, {p.track_id for p in paths}, cfg)
     report["ball"] = ball_note
     teams = {k: TEAM_ZH.get(v, v) for k, v in abbr.items()}
-    if len(teams) == 2:
-        title = f"{teams['off']}对{teams['def']} · 3D 战术复盘"
-    else:
-        title = "3D 战术复盘"
+    title, report["title_source"] = _resolve_title(title, events, teams)
+    report["title"] = title
     phases = _phases(events, t0, t1)
     play = {
         "title": title,

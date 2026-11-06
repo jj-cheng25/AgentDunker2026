@@ -79,6 +79,11 @@ def tiers(run: Run, edl: dict, data: dict, rj: Optional[dict], narration: Option
         t("replay_3d", "B" if deg or (rj or {}).get("n_players", 10) < 10 else "A",
           "; ".join(map(str, deg)) or "", window=rep["source"], n_players=(rj or {}).get("n_players"),
           repeated_frames=(lay.get("replay") or {}).get("repeated_frames"))
+        want, got = edl["decisions"].get("replay_title") or "", (rj or {}).get("title") or ""
+        t("title_3d", "A" if want and got == want else "B",
+          "director title from measured facts" if want and got == want else
+          ("M4 default title (no names / no matched game)" if not want else f"M4 shows {got!r}, wanted {want!r}"),
+          title=got, title_source=(rj or {}).get("title_source"))
         srcs = {ph.get("text_source", "template") for ph in rep["phases"]}
         t("phase_titles", "A" if srcs == {"llm"} else "B", "gemini-3.8-flash from verified events" if srcs == {"llm"}
           else "template titles for some phases", phases=[[ph["title"], ph["desc"]] for ph in rep["phases"]])
