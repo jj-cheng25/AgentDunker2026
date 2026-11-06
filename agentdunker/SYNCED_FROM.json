@@ -223,7 +223,7 @@
    "source_package": "agentdunker",
    "commit": "4e1735f3a120fdb1a942478b6761233e1aa39abe",
    "files": 29,
-   "tree_sha256": "24ad946f4167cab2",
+   "tree_sha256": "8e043edfff9cbe5d",
    "rules": [
     {
      "file": "season.py",
@@ -240,6 +240,14 @@
     {
      "file": "render/promo.py",
      "why": "one Chromium lookup for the whole package"
+    },
+    {
+     "file": "render/promo.py",
+     "why": "no Chromium must drop intro/outro, not the film (build_mix accepts None)"
+    },
+    {
+     "file": "render/promo.py",
+     "why": "no Chromium must not fail the mux"
     },
     {
      "file": "models.py",

@@ -101,7 +101,7 @@ def cmd_run(a) -> int:
     print(f"report {out / 'report.json'}", file=sys.stderr)
     for d in meta.get("degraded", []):
         print(f"  {d['tier']}  {d['element']:15s} {d['reason'][:110]}", file=sys.stderr)
-    for k, v in meta.get("services_missing", {}).items():
+    for v in meta.get("services_missing", {}).values():
         print(f"  note  {v}", file=sys.stderr)
     return 0 if rep.get("ok") else 1
 
@@ -117,8 +117,6 @@ def cmd_download(a) -> int:
     print(f"model dir: {weights.model_dir()}")
     failed = weights.download(names=a.only.split(",") if a.only else None, preset=a.preset, force=a.force)
     if not a.only:
-        if not a.no_clip:
-            failed += weights.download_hf()
         if not a.no_chromium and not weights.chromium_path():
             if not weights.install_chromium():
                 failed.append("chromium")
@@ -171,7 +169,6 @@ def main(argv: list[str] | None = None) -> int:
     m.add_argument("--preset", choices=["fast", "quality"], help="only what this preset needs")
     m.add_argument("--only", help="comma list of asset names")
     m.add_argument("--force", action="store_true")
-    m.add_argument("--no-clip", action="store_true")
     m.add_argument("--no-chromium", action="store_true")
     _common(m)
     m.set_defaults(fn=cmd_download)

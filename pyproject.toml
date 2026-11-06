@@ -65,7 +65,7 @@ testpaths = ["tests", "agentdunker"]
 markers = ["slow: needs weights and Chromium (skipped in CI)"]
 
 [tool.ruff]
-line-length = 130
+line-length = 140
 target-version = "py310"
 extend-exclude = ["agentdunker/tracking", "agentdunker/court", "agentdunker/identity", "agentdunker/replay",
                   "agentdunker/events", "agentdunker/narration", "agentdunker/film"]   # synced code: lint upstream
