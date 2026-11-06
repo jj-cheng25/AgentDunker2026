@@ -136,3 +136,25 @@ def moss_or_llm_post(url: str, key_env: str, timeout: float = 180, **kw) -> requ
     if key is None:
         raise RuntimeError("missing credential: MOSS voice is not configured (MOSS_API_KEY)")
     return requests.post(url, headers={"Authorization": f"Bearer {key}"}, timeout=timeout, **kw)
+
+
+def ping(timeout: float = 15) -> dict:
+    """One authenticated ``GET /models`` per configured service: is the key accepted? (no model call, no cost)"""
+    out = {}
+    l = config.llm()
+    key = llm_key()
+    if key is not None:
+        out["llm"] = _ping(f"{l.base_url}/models", key, timeout)
+    m = config.get()["moss"]
+    mk = _read_key(m.get("key_env", "MOSS_API_KEY"), m.get("key_file", ""))
+    if mk is not None:
+        out["moss"] = _ping(f"{m['base_url'].rstrip('/')}/models", mk, timeout)
+    return out
+
+
+def _ping(url: str, key: str, timeout: float) -> str:
+    try:
+        r = requests.get(url, headers={"Authorization": f"Bearer {key}"} if key != "none" else {}, timeout=timeout)
+    except requests.RequestException as e:
+        return f"unreachable ({type(e).__name__})"
+    return {200: "ok", 401: "key rejected (401)", 403: "key rejected (403)"}.get(r.status_code, f"HTTP {r.status_code}")

@@ -41,7 +41,7 @@ def preflight() -> list[str]:
     return out
 
 
-def doctor(verify: bool = False) -> int:
+def doctor(verify: bool = False, ping: bool = False) -> int:
     config.apply()
     ok = True
     print(f"agentdunker doctor · Python {platform.python_version()} · {platform.system()} {platform.machine()}")
@@ -87,6 +87,10 @@ def doctor(verify: bool = False) -> int:
           f"set {m['key_env']} for the commentary voice")
     _line(svc["moss_vl"]["ok"] or None, "MOSS-VL checks", "on" if svc["moss_vl"]["ok"] else "off → rules only",
           f"set {m['key_env']}")
+    if ping:
+        for name, st in providers.ping().items():
+            ok &= _line(True if st == "ok" else None, f"{name} key (live check)", st,
+                        "replace the key; the run would fall back to rules/templates")
     data = config.path("nba_data")
     has = data.is_dir() and any(data.iterdir())
     _line(has or None, "official NBA data", str(data) if has else f"{data} (empty)",
