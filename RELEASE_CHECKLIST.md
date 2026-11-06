@@ -19,7 +19,7 @@ making the repository public, needs the user's explicit go-ahead.**
 | A9 | **Logos**: `film/assets/promo/intro.html` and `outro.html` embed **3 base64 PNG logos in the order SII × Fudan × MOSI** (上海创智学院 × 复旦大学 × MOSI 模思; synced from M7 cf8ddb8 and later, identical to the demo cover) | trademark use in a public repo and in every film other people make | the user must confirm each institution's consent to logo use (repo is already public); else make them optional / replace with text |
 | A10 | **Mixamo-derived avatar** `Xbot.glb` | downloaded from three.js examples (not committed); Mixamo terms forbid redistributing the raw character | fine as a download; for a Space or Docker image, consider our own avatar |
 | A12 | **Commit author identity**: all commits are authored as `jj-cheng25 <personal e-mail>` | the e-mail becomes public with the repository (history included) | keep, or rewrite history to a GitHub noreply address *before* going public (after that a rewrite breaks clones) |
-| A13 | **GitHub Actions** run on every push | `ci.yml` must pass on GitHub's runners (not only locally); it installs CPU torch, runs ruff, `tools/release_scan.py` and pytest | green for 9eb3289, 53682cd, a23877d; **red on 0ff953a** (run 42190200318: release scan flagged the 4.8 MB `docs/media/replay.webp`). Fixed locally: the file is a reviewed exception pinned by blob id in `tools/release_scan.py`; push the fix and re-check |
+| A13 | **GitHub Actions** run on every push | `ci.yml` must pass on GitHub's runners (not only locally); it installs CPU torch, runs ruff, `tools/release_scan.py` and pytest | ✅ green on the current main 96b78a3 (run 42194693950) and on a07e950 (run 42193554529); also green on 9eb3289, 53682cd, a23877d. 0ff953a was red (release scan vs the 4.8 MB replay.webp), fixed by a07e950 |
 | A11 | **Mosshub key** | was rejected (401) until 2026-11-06 ~04:30Z; the replaced key passes `agentdunker doctor --ping` | done (keep keys out of the repo) |
 
 ## B. Done before the first push (verified)
@@ -32,7 +32,7 @@ making the repository public, needs the user's explicit go-ahead.**
 - [x] CI (`.github/workflows/ci.yml`): lint, scan, unit + synthetic smoke tests; no paid calls, no weight downloads.
 - [x] First private push (9eb3289) — by the commander, with the user's approval.
 - [ ] Each later push: user go-ahead via the commander (A-items block **public**, not private pushes).
-- [ ] GitHub Actions green on the latest pushed commit (A13: 0ff953a red, fix ready locally).
+- [x] GitHub Actions green on the latest pushed commit (A13: 96b78a3, run 42194693950).
 
 ## C. Before making the repository public
 
