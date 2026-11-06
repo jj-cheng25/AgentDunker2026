@@ -3,6 +3,7 @@
 <p><img src="docs/media/hero_en.svg" width="100%" alt="AgentDunker: AI basketball commentary and visualization agent"></p>
 
 <p>
+<a href="https://mp.weixin.qq.com/s/hhVN8YK1eZvnQ_MH6_-vlg"><img alt="silver award, AWS × NBA hackathon 2026" src="https://img.shields.io/badge/silver_award-AWS_%C3%97_NBA_hackathon_2026-c9d3dc?style=flat-square&labelColor=0b2233"></a>
 <a href="LICENSE"><img alt="license AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-ff8a3d?style=flat-square&labelColor=0b2233"></a>
 <img alt="python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3fe0ff?style=flat-square&labelColor=0b2233&logo=python&logoColor=white">
 <img alt="runs on CPU" src="https://img.shields.io/badge/runs_on-CPU-3fe0ff?style=flat-square&labelColor=0b2233">
@@ -13,7 +14,7 @@
 
 **Give it a 5–20 s NBA broadcast possession; get back a narrated breakdown film with a ten-player holographic 3D tactical replay — fully automatic.**
 
-[中文](README.md) · [Quick start](#quick-start) · [How it works](#how-it-works) · [Benchmark](#benchmark) · [Performance](docs/performance.md) · [Architecture](docs/architecture.md) · [Data contracts](docs/contracts.md) · [Configuration](docs/configuration.md)
+[中文](README.md) · [Awards](#awards-and-press) · [Quick start](#quick-start) · [How it works](#how-it-works) · [Benchmark](#benchmark) · [Performance](docs/performance.md) · [Architecture](docs/architecture.md) · [Data contracts](docs/contracts.md) · [Configuration](docs/configuration.md)
 
 </div>
 
@@ -22,6 +23,14 @@ https://github.com/user-attachments/assets/daae0661-46ec-4bcc-ac1b-9dedd5bc3615
 
 <p align="center">▶ <b><a href="https://github.com/jj-cheng25/AgentDunker2026/releases/tag/demo-durant">Watch the full 1080p film (GitHub Release: demo-durant)</a></b></p>
 <!-- DEMO-END -->
+
+## Awards and press
+
+<a href="https://mp.weixin.qq.com/s/hhVN8YK1eZvnQ_MH6_-vlg"><img src="docs/media/award_en.svg" width="100%" alt="Silver Award, AWS × NBA Broadcast Code 12H Hackathon (click for the AWS China article)"></a>
+
+- **Silver Award** at the Broadcast Code 12H Hackathon hosted by AWS and the NBA (10–11 Oct 2026, Zhuhai and Macau, China). 120 developers formed 42 teams; the 8 finalists pitched at NBA House in Macau, and our team “爱看球的agent” won one of the three silver awards (1 gold, 3 silver, 4 bronze), presented by Krishna Bhagavathula, NBA EVP and CIO, among others.
+- **Featured by AWS China's official WeChat account**: [“当120+名极客用AI给NBA‘做解说’，中国澳门的决赛现场燃炸了！”](https://mp.weixin.qq.com/s/hhVN8YK1eZvnQ_MH6_-vlg) (12 Oct 2026, in Chinese), in a section on our entry titled “an AI commentator with more emotion than a real fan”.
+- The team comes from Shanghai Innovation Institute, Fudan University and the MOSS-VL video-understanding team at MOSI. AgentDunker started as our hackathon entry; this repository is the fully automatic, installable rewrite that followed.
 
 ## Highlights
 
