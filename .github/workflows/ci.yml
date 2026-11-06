@@ -9,6 +9,7 @@ jobs:
       ADK_VOICE: none
     steps:
       - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
       - uses: actions/setup-python@v5
         with: {python-version: "3.12"}
       - name: system packages
@@ -19,10 +20,10 @@ jobs:
           pip install -e '.[dev]'
       - name: lint
         run: ruff check agentdunker/*.py tests tools
-      - name: no large or forbidden files
-        run: |
-          big=$(git ls-files -z | xargs -0 du -k | awk '$1 > 2048 {print $2}')
-          test -z "$big" || { echo "files over 2 MB: $big"; exit 1; }
-          ! git ls-files | grep -E '\.(mp4|mov|mkv|wav|pt|pth|onnx|glb|ttf)$'
+      - name: release scan (secrets, footage, weights, large files, history)
+        run: python tools/release_scan.py
+      - name: synced modules match their pins
+        if: false   # needs the module worktrees; run locally: python tools/sync_modules.py --check
+        run: python tools/sync_modules.py --check
       - name: tests (unit + synthetic smoke)
         run: pytest -q
