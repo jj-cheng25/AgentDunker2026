@@ -87,9 +87,12 @@ def cmd_run(a) -> int:
     problems = preflight()
     for p in problems:
         print(f"warning: {p}", file=sys.stderr)
-    c = config.get()
+    from .providers import available
+    c, svc = config.get(), available()
+    nokey = " (no key)"
     print(f"agentdunker {__version__} · preset {c['run']['preset']} · {config.threads()} threads · "
-          f"LLM {config.llm().provider} · voice {c['voice']['backend']} · runner {c['run']['runner']}", file=sys.stderr)
+          f"LLM {config.llm().provider}{'' if svc['llm']['ok'] else nokey} · "
+          f"voice {c['voice']['backend']}{'' if svc['voice']['ok'] else nokey} · runner {c['run']['runner']}", file=sys.stderr)
     out = Path(a.out)
     rep = make_film(str(clip), str(out), reuse=a.reuse, skip=tuple(s for s in (a.skip or "").split(",") if s),
                     progress=Progress())
