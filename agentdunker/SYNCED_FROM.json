@@ -131,9 +131,9 @@
    "module": "m4",
    "branch_worktree": "adk-cmd-m4",
    "source_package": "adk_replay",
-   "commit": "7c5dbe548e5a8f53ddea49060b97c0d5549d8b92",
+   "commit": "bd525952ffeb1fc2ce69fd1dc341977782f003a7",
    "files": 42,
-   "tree_sha256": "3eac191af2eb23cd",
+   "tree_sha256": "6f4f63cb4ccbbcd9",
    "rules": [
     {
      "file": "__main__.py",
@@ -146,6 +146,10 @@
     {
      "file": "browser.py",
      "why": "Xbot.glb is a downloaded asset"
+    },
+    {
+     "file": "browser.py",
+     "why": "the CJK label font is a downloaded asset (Noto Sans CJK SC 2.004)"
     },
     {
      "file": "browser.py",
@@ -221,9 +225,9 @@
    "module": "m7",
    "branch_worktree": "adk-cmd-m7",
    "source_package": "agentdunker",
-   "commit": "4e1735f3a120fdb1a942478b6761233e1aa39abe",
-   "files": 29,
-   "tree_sha256": "8e043edfff9cbe5d",
+   "commit": "cf8ddb8500be133c078da24ebe6119a077ed5f85",
+   "files": 30,
+   "tree_sha256": "eab61401c2bdf30f",
    "rules": [
     {
      "file": "season.py",

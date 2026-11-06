@@ -8,7 +8,7 @@ def test_stage_args_preset_and_threads():
     a = runner.stage_args("m1", ["clip.mp4", "--threads", "16", "-o", "t.json"])
     assert a.count("--threads") == 1 and a[a.index("--threads") + 1] == "6"
     assert "yolo11m.pt" in a
-    assert runner.stage_args("m5", ["v"])[-3:] == ["--no-pose", "--threads", "6"]
+    assert runner.stage_args("m5", ["v"]) == ["v", "--threads", "6"]
     config.override(run={"preset": "quality"})
     assert runner.stage_args("m2", ["v", "-o", "c.json"]) == ["v", "-o", "c.json"]
 

@@ -150,3 +150,32 @@ def moss_vl(prompt: str, images: list[np.ndarray], tag: str, timeout: float = 18
     path.write_text(json.dumps({"text": text, "model": out.get("model")}, ensure_ascii=False))
     _record(MOSS_VL_MODEL, tag, False, True, time.time() - t0)
     return text
+
+
+ASR_MODEL = os.environ.get("ADK_ASR_MODEL", "moss-transcribe-diarize-pro")
+
+
+def moss_asr(wav_bytes: bytes, tag: str, timeout: float = 120) -> Optional[str]:
+    """MOSS ASR transcript of a WAV (cached by content), or None when unavailable."""
+    path, body = _cached("moss_asr", {"model": ASR_MODEL, "audio": hashlib.sha256(wav_bytes).hexdigest()})
+    t0 = time.time()
+    if body is not None:
+        _record(ASR_MODEL, tag, True, True, time.time() - t0)
+        return body["text"]
+    key = _key("MOSS_API_KEY", ".config/moss/key")
+    if not key:
+        return None
+    try:
+        r = requests.post(f"{MOSS_URL}/audio/transcriptions", headers={"Authorization": f"Bearer {key}"},
+                          files={"file": ("clip.wav", wav_bytes, "audio/wav")},
+                          data={"model": ASR_MODEL, "response_format": "json"}, timeout=(15, timeout))
+        r.raise_for_status()
+        text = str(r.json().get("text", ""))
+    except (requests.RequestException, ValueError) as e:
+        logger.warning("moss-asr %s failed: %s", tag, type(e).__name__)
+        _record(ASR_MODEL, tag, False, False, time.time() - t0)
+        return None
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"text": text}, ensure_ascii=False))
+    _record(ASR_MODEL, tag, False, True, time.time() - t0)
+    return text

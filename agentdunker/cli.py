@@ -152,7 +152,7 @@ def main(argv: list[str] | None = None) -> int:
     r = sub.add_parser("run", help="make a film from a clip")
     r.add_argument("clip", help="NBA broadcast offense clip, 5–20 s")
     r.add_argument("-o", "--out", required=True, help="output directory (film.mp4, report.json, work/)")
-    r.add_argument("--preset", choices=["fast", "quality"], help="fast: smaller detector, no pose; quality: default")
+    r.add_argument("--preset", choices=["fast", "quality"], help="fast: YOLO11m at 10 Hz; quality: YOLO11x at 15 Hz (default)")
     r.add_argument("--threads", type=int, help="CPU threads for every stage (default 16)")
     r.add_argument("--device", choices=["auto", "cpu", "cuda"])
     r.add_argument("--provider", choices=["mosshub", "openai", "gemini", "none"], help="LLM/VLM provider")

@@ -82,8 +82,9 @@ def tiers(run: Run, edl: dict, data: dict, rj: Optional[dict], narration: Option
         srcs = {ph.get("text_source", "template") for ph in rep["phases"]}
         t("phase_titles", "A" if srcs == {"llm"} else "B", "gemini-3.8-flash from verified events" if srcs == {"llm"}
           else "template titles for some phases", phases=[[ph["title"], ph["desc"]] for ph in rep["phases"]])
-        t("subtitles_3d", "A" if any(ph.get("line") for ph in rep["phases"]) else "C",
-          "" if any(ph.get("line") for ph in rep["phases"]) else "no narration line per phase")
+        n_line = sum(bool(ph.get("line")) for ph in rep["phases"])
+        t("subtitles_3d", "A" if n_line == len(rep["phases"]) else "B",
+          "" if n_line == len(rep["phases"]) else f"{len(rep['phases']) - n_line} phase(s) show the fact description (no line)")
     else:
         why = edl["decisions"].get("replay_skip") or ("no calibrated wide window ≥ 3 s" if not edl["decisions"].get("replay_window")
                                                        else (run.mods.get("replay").reason if run.mods.get("replay") else "M4 failed"))
@@ -109,11 +110,12 @@ def tiers(run: Run, edl: dict, data: dict, rj: Optional[dict], narration: Option
             t(k, "C", "no shot")
     if narration:
         q = narration.get("quality", {})
-        dropped = getattr(run, "dropped_lines", [])
+        dropped, trimmed = getattr(run, "dropped_lines", []), getattr(run, "trimmed_lines", [])
         tier = q.get("tier", "B") if not dropped else "B"
         t("narration", tier, ("" if tier == "A" else "see narration quality")
-          + (f"; {len(dropped)} line(s) dropped for unsupported action words" if dropped else ""),
-          lines=q.get("lines"), dropped_lines=dropped, track_cer=q.get("track_cer"), all_in_window=q.get("all_in_window"))
+          + (f"; {len(dropped)} line(s) dropped for unsupported claims" if dropped else "")
+          + (f"; {len(trimmed)} unsupported clause(s) cut" if trimmed else ""),
+          lines=q.get("lines"), dropped_lines=dropped, trimmed_lines=trimmed, track_cer=q.get("track_cer"), all_in_window=q.get("all_in_window"))
     else:
         r = run.mods.get("narration")
         t("narration", "C", (r.reason if r else "not run") + "; live segment keeps the broadcast sound")

@@ -22,9 +22,12 @@ logger = logging.getLogger(__name__)
 INTRO_S = OUTRO_S = 6.0
 BRIDGE_S = 4.8
 FREEZE_S, FREEZE_NO_XFG_S = 5.2, 3.2
-REPLAY_SPEED = 0.6            # planned 3D speed before audio-first retiming
+# 3D pacing. The reference runs its phases at 0.52/0.61/0.67/0.62× and slows the last (shot build-up) one
+# further; the brief caps slow motion at 2×, so: 0.56× per phase, 0.5× for the last, longer only when the
+# phase's commentary line needs it (never slower than 0.5×, never faster than 1.0×).
+REPLAY_SPEED = REPLAY_PREFERRED_SPEED = 0.56
+REPLAY_FINAL_SPEED = 0.5
 REPLAY_MIN_SPEED, REPLAY_MAX_SPEED = 0.5, 1.0
-REPLAY_PREFERRED_SPEED = 0.65     # slow-motion floor when the line is short (reference averages 0.52×)
 REPLAY_END_HOLD = 1.0
 REPLAY_MIN_S = 3.0
 PRE_RELEASE = 0.65
@@ -123,7 +126,7 @@ def _ball_holder(events: Optional[dict], t0: float, t1: float) -> Optional[int]:
 
 def split_phases(w0: float, w1: float, events: Optional[dict], facts: list) -> list[dict]:
     """Phase boundaries at measured facts (pass/screen/cut/drive/closeout/help), each 1.8–4 s, at most 5."""
-    order = {"drive": 0, "pass": 1, "screen": 2, "cut": 3, "closeout": 4, "help": 5}
+    order = {"drive": 0, "pass": 1, "screen": 2, "space": 3, "cut": 4, "closeout": 5, "help": 6}
     cands = sorted([f for f in facts if w0 + MIN_PHASE_S <= f.t0 <= w1 - MIN_PHASE_S * 0.6],
                    key=lambda f: (order.get(f.type, 9), -f.conf))
     bounds = [w0, w1]
@@ -148,7 +151,7 @@ def split_phases(w0: float, w1: float, events: Optional[dict], facts: list) -> l
 
 
 FACT_TITLE = {"pass": "传球转移", "screen": "掩护配合", "cut": "无球切入", "drive": "持球突破",
-              "closeout": "防守扑出", "help": "协防收缩"}
+              "closeout": "防守扑出", "help": "协防收缩", "space": "空间展开"}
 
 
 def template_title(ph: dict, names: dict, last: bool, shooter: Optional[int] = None, seen_drive: bool = False
@@ -157,7 +160,7 @@ def template_title(ph: dict, names: dict, last: bool, shooter: Optional[int] = N
     if not fs:
         holder = label(ph["holder"], names) if ph["holder"] is not None else "持球人"
         return ("准备出手" if last else "持球观察"), f"{holder}持球，队友保持站位。", []
-    key = next((f for t in ("drive", "pass", "screen", "cut", "closeout", "help") for f in fs if f["type"] == t))
+    key = next((f for t in ("drive", "pass", "screen", "space", "cut", "closeout", "help") for f in fs if f["type"] == t))
     title = FACT_TITLE[key["type"]]
     if key["type"] == "pass" and key["actors"][1:] == [shooter]:
         title = "回传组织"
@@ -187,7 +190,8 @@ def phase_titles(phases: list[dict], names: dict, use_llm: bool = True, shooter:
               "1. 标题和说明只能描述该阶段列出的事实，并在 evidence 中写出用到的事实编号（必须来自该阶段）。\n"
               "2. 不要写事实里没有的动作（如虚晃、变向、转身、后撤步、扣篮）、位置、比分或数字。\n"
               "3. 没有事实的阶段，evidence 写空列表，标题写“持球观察”或“落位组织”。\n"
-              f"4. 可用人名只有：{'、'.join(allowed) or '无（用持球人/队友/防守人）'}。\n\n" + "\n".join(lines))
+              "4. 标题只写战术名称，不要出现人名或号码；人名只能写在说明里。相邻阶段的标题不要重复同一个词。\n"
+              f"5. 可用人名只有：{'、'.join(allowed) or '无（用持球人/队友/防守人）'}。\n\n" + "\n".join(lines))
     schema = {"type": "object", "properties": {"phases": {"type": "array", "items": {
         "type": "object", "properties": {"title": {"type": "string"}, "desc": {"type": "string"},
                                          "evidence": {"type": "array", "items": {"type": "string"}}},
@@ -212,9 +216,34 @@ def phase_titles(phases: list[dict], names: dict, use_llm: bool = True, shooter:
             continue
         if any(m not in allowed for m in re.findall(r"\d+号", title + desc)):
             continue
+        if re.search(r"\d|号", title) or any(n and n in title for n in allowed):
+            continue                                  # titles name the tactic, not the player
         ph["title"], ph["desc"], ph["evidence"], ph["text_source"] = title, desc, ev, "llm"
     n_llm = sum(ph["text_source"] == "llm" for ph in phases)
     return f"llm {n_llm}/{len(phases)}"
+
+
+def replay_title(identity: Optional[dict], names: dict, shooter: Optional[int], facts: list) -> str:
+    """3D top-left title, e.g. 火箭客场对独行侠 · 杜兰特单打前的空间组织 (every word backed by data)."""
+    gm = (identity or {}).get("game_match") or {}
+    me = names.get(shooter) or {}
+    off = me.get("team_abbr")
+    head = ""
+    if off and gm.get("status") == "matched" and off in (gm.get("home"), gm.get("away")):
+        opp = gm["away"] if off == gm["home"] else gm["home"]
+        if TEAM_ZH.get(off) and TEAM_ZH.get(opp):
+            head = f"{TEAM_ZH[off]}{'主场' if off == gm['home'] else '客场'}对{TEAM_ZH[opp]}"
+    who = me.get("short") or ""
+    types = {(f.type, int(f.numbers.get("holder", f.actors[0] if f.actors else -1))) for f in facts}
+    if not who:
+        tail = "3D 战术复盘"
+    elif ("space", shooter) in types:
+        tail = f"{who}单打前的空间组织"
+    elif ("drive", shooter) in types:
+        tail = f"{who}持球突破的进攻组织"
+    else:
+        tail = f"{who}出手前的进攻组织"
+    return f"{head} · {tail}" if head else tail
 
 
 # ---------------------------------------------------------------- resume
@@ -278,12 +307,13 @@ def build_edl(video: dict, shots: list[dict], tracks: Optional[dict], court: Opt
             facts = []
         decisions["facts"] = [f.as_dict() for f in facts]
         decisions["annotations"] = factmod.annotations(facts, w0)
+        decisions["replay_title"] = replay_title(identity, names, shooter, facts)
         phases = split_phases(w0, w1, events, facts)
         decisions["phase_text"] = phase_titles(phases, names, use_llm, shooter)
         knots, out_t = [], 0.0
-        for ph in phases:
+        for i, ph in enumerate(phases):
             a, b = ph["src"]
-            ph["film_len"] = round((b - a) / REPLAY_SPEED, 3)
+            ph["film_len"] = round((b - a) / (REPLAY_FINAL_SPEED if i == len(phases) - 1 else REPLAY_SPEED), 3)
             knots.append([round(out_t, 3), a])
             out_t += ph["film_len"]
         knots.append([round(out_t, 3), w1])
@@ -378,7 +408,9 @@ def narration_doc(edl: dict, events: Optional[dict], identity: Optional[dict], n
             what = "；".join(f["text"] for f in ph["facts"]) or "持球人观察，队友保持站位（无其他已测动作）"
             evs.append({"t": body(rep["film"][0] + ft) + 0.3, "type": key["type"] if key and key["type"] in
                         ("pass", "screen", "drive") else "other", "actors": (key or {}).get("actors", []),
-                        "conf": 0.8, "note": f"3D replay, measured actions only: {what}", "phase": ph["title"]})
+                        "conf": 0.8, "note": f"3D replay, measured actions only: {what}. Effects on the defense (drawing, "
+                                         "pulling or freezing defenders) were not measured: do not claim them",
+                        "phase": ph["title"]})
     fr = seg(edl, "freeze")
     if fr:
         evs.append({"t": body(fr["film"][0]) + 0.2, "type": "shot", "actors": [tid] if tid else [], "conf": 0.9,

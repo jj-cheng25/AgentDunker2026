@@ -31,9 +31,10 @@ REPO = Path(__file__).resolve().parents[1]
 # Stage arguments per preset. "quality" = the module defaults (what M7 runs).
 PRESETS: dict[str, dict[str, list[str]]] = {
     "quality": {},
+    # fast: smaller detector at 10 Hz. v1 also used 960 px and --no-pose: shooter 3/3 → 2/3 and release error
+    # 0.05 → 0.14 s for 25 s saved, so pose stays on (docs/performance.md).
     "fast": {
-        "m1": ["--detector", "yolo11m.pt", "--imgsz", "960", "--det-hz", "10"],
-        "m5": ["--no-pose"],
+        "m1": ["--detector", "yolo11m.pt", "--det-hz", "10"],
     },
 }
 THREADED = {"m1", "m3", "m5"}          # stages with a --threads option

@@ -1,6 +1,6 @@
 # Release checklist
 
-Target: GitHub `jj-cheng25/AgentDunker2026` (private). Commit 9eb3289 was pushed to `main` by the commander from the
+Target: GitHub `jj-cheng25/AgentDunker2026` — **public since 2026-11-06** (user decision). Commit 9eb3289 was pushed to `main` by the commander from the
 user's Mac with the user's approval (2026-11-06); nothing is pushed from cpu-0. Later pushes go through the commander. **Every push, and
 making the repository public, needs the user's explicit go-ahead.**
 
@@ -8,7 +8,7 @@ making the repository public, needs the user's explicit go-ahead.**
 
 | # | item | why it matters | options / recommendation |
 |---|---|---|---|
-| A1 | **Demo material** (README cover, sample film) | every film contains NBA broadcast footage (© NBA). README now shows `docs/media/cover.jpg` (our cover, logos SII · Fudan · MOSI) linking to the pre-release `demo-durant` (1080p + 720p film, created by the commander); the inline player line is still a marked placeholder | (a) no footage: 3D replay stills only (our renders, no broadcast frame) + architecture diagram; (b) a short clip under a fair-use/commentary argument (legal risk); (c) ask the NBA / a rights holder. Recommendation: (a) for launch, the 3D replay is the most distinctive frame anyway |
+| A1 | **Demo material** | every film contains NBA broadcast footage (© NBA) | **decided by the user**: README shows the demo film as an inline player (user-attachments, a23877d) plus the `demo-durant` pre-release (1080p, 720p, cover). `docs/media/cover.jpg` stays in the repo, unreferenced |
 | A2 | **Mossland voice** (MOSS TTS `voice_id 865098d7…`) | the default voice of the public pipeline; terms for public use not confirmed. The hackathon voice that cloned 于嘉 must **never** be used | confirm with MOSI that the Mossland voice may be the default in an open-source project and in published films |
 | A3 | **Official data terms** (api.nba.cn PBP, box scores, xFG, gpShot, season tables; `identity/names_zh.py` calls `api.nba.cn` live for Chinese names) | names, xFG card and season stats depend on it; no data is shipped | decide: keep "bring your own data" (current), or drop the live api.nba.cn call, or get permission. Also: `narration/roster_zh.json` (Chinese player names) and `narration/fixtures/*.json` (event JSON of three benchmark clips) are derived from that data — keep, or replace with a generated roster |
 | A4 | **Licence** | AGPL-3.0 is forced by Ultralytics YOLO11 / BoT-SORT and the court-33 model (no licence on its model card; AGPL assumed as a YOLO11 derivative) | keep AGPL-3.0 (current), or buy an Ultralytics enterprise licence / swap to Apache-2.0 detectors (DEIM, RT-DETR from other sources) for a permissive release |

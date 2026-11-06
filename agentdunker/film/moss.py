@@ -64,7 +64,7 @@ def readback_card(film: str, t: float, rect: list[int], expect_name: str, expect
         return {"checked": False}
     # Format-free comparison: the model reads well but does not always follow the answer template.
     flat = re.sub(r"\s", "", text)
-    nums = re.findall(r"\d+(?:\.\d+)?", flat)
+    nums = re.findall(r"\d+(?:\.\d+)?", text)          # not `flat`: "21\n21.3%" must not merge into 2121.3
     want_num = f"{expect_xfg * 100:.1f}" if expect_xfg is not None else ""
     return {"checked": True, "heard": text.strip()[:120],
             "name_ok": (not expect_name) or expect_name in flat,

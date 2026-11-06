@@ -5,9 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Holo Court</title>
   <style>
+    @font-face { font-family: "AdkCJK"; src: url("/fonts/cjk.otf") format("opentype"); font-display: block; }
     :root { --cyan: #35e6ff; --orange: #ff9a2e; --fg: #dff6ff; --panel: rgba(8, 18, 24, 0.72); }
     html, body { margin: 0; height: 100%; background: #020406; color: var(--fg); overflow: hidden;
-      font-family: "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", system-ui, sans-serif; }
+      font-family: "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", "AdkCJK", system-ui, sans-serif; }
     #stage { position: fixed; inset: 0; }
     #hud { position: fixed; top: 18px; left: 20px; pointer-events: none; }
     #title { font-size: 22px; font-weight: 700; letter-spacing: 2px; text-shadow: 0 0 12px var(--cyan); }
