@@ -64,8 +64,25 @@ def make_film(clip: str, out_dir: str, *, reuse: Optional[str] = None, skip: tup
     _hook_timed(Run)
     svc = providers.available()
     t0 = time.monotonic()
-    rep = film_mod.make_film(clip, out_dir, reuse=reuse, use_llm=svc["llm"]["ok"], use_moss_vl=svc["moss_vl"]["ok"],
-                             skip=skip)
+    logs = Path(out_dir) / "work" / "logs"
+    logs.mkdir(parents=True, exist_ok=True)
+    fh = logging.FileHandler(logs / "agentdunker.log")          # the whole run at INFO (console: warnings)
+    fh.setLevel(logging.INFO)
+    fh.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(threadName)s %(name)s: %(message)s"))
+    root = logging.getLogger()
+    root.addHandler(fh)
+    if root.level == logging.NOTSET or root.level > logging.INFO:
+        root.setLevel(logging.INFO)
+    try:
+        rep = film_mod.make_film(clip, out_dir, reuse=reuse, use_llm=svc["llm"]["ok"],
+                                 use_moss_vl=svc["moss_vl"]["ok"], skip=skip)
+    finally:
+        root.removeHandler(fh)
+        fh.close()
+    return _finish(rep, out_dir, svc, t0)
+
+
+def _finish(rep: dict, out_dir: str, svc: dict, t0: float) -> dict:
     degraded = [{"element": k, "tier": v["tier"], "reason": v.get("reason", "")}
                 for k, v in (rep.get("elements") or {}).items() if v.get("tier") != "A"]
     rep["agentdunker"] = {

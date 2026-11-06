@@ -73,8 +73,9 @@ def _setup(a) -> None:
         over["llm"], over["voice"], over["moss"] = {"provider": "none"}, {"backend": "none"}, {"vl_checks": False}
     if over:
         config.override(**over)
-    logging.basicConfig(level=logging.INFO if getattr(a, "verbose", False) else logging.WARNING,
-                        format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    for h in logging.getLogger().handlers:         # console: warnings only, unless -v; files get INFO
+        h.setLevel(logging.INFO if getattr(a, "verbose", False) else logging.WARNING)
 
 
 def cmd_run(a) -> int:
@@ -111,7 +112,7 @@ def cmd_run(a) -> int:
 
 def cmd_doctor(a) -> int:
     from .doctor import doctor
-    return doctor(verify=a.verify)
+    return doctor(verify=a.verify, ping=a.ping)
 
 
 def cmd_download(a) -> int:
@@ -165,6 +166,7 @@ def main(argv: list[str] | None = None) -> int:
 
     d = sub.add_parser("doctor", help="check the environment")
     d.add_argument("--verify", action="store_true", help="also verify weight checksums (slow)")
+    d.add_argument("--ping", action="store_true", help="check that the API keys are accepted (GET /models, free)")
     _common(d)
     d.set_defaults(fn=cmd_doctor)
 
