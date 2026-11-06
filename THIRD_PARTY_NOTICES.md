@@ -26,6 +26,7 @@ listed source and checks its sha256 (`agentdunker/weights.py` holds the exact UR
 | `deim_m_640.onnx` | ball / rim / player detection | Apache-2.0 | ortizeg/basketball-deim-m-640 @ 1b4f378 |
 | `Xbot.glb` | 3D player avatar | MIT (three.js repository); the character originates from Adobe Mixamo | mrdoob/three.js @ 0d61155 `examples/models/gltf/Xbot.glb` |
 | Montserrat, Noto Sans SC, Barlow Condensed | film typography | SIL OFL 1.1 (texts in `agentdunker/film/assets/fonts/OFL-*.txt`) | google/fonts @ 24ddc1f |
+| Noto Sans CJK SC 2.004 (`NotoSansSC-Regular.otf`) | Chinese labels in the 3D replay page | SIL OFL 1.1 | notofonts/noto-cjk @ Sans2.004 |
 | Chromium (Playwright build) | headless rendering of the 3D replay and the transition page | BSD-3-Clause and others (Chromium) | `python -m playwright install chromium` |
 
 ## Python dependencies (installed by pip, not included)

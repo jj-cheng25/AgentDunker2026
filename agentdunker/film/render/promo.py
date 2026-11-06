@@ -30,12 +30,31 @@ TRANSITION_NATIVE_S = 4.4
 
 
 def chromium_executable() -> str | None:
-    """A Chromium binary for Playwright: $ADK_CHROMIUM, else the newest Playwright-managed build."""
+    """A Chromium binary: $ADK_CHROMIUM, else the newest Playwright-managed build under
+    $PLAYWRIGHT_BROWSERS_PATH, ~/.cache/ms-playwright or the shared ``tools/ms-playwright`` next to the repo."""
     from agentdunker.weights import chromium_path
     if chromium_path():
         return chromium_path()
-    found = sorted(glob.glob(str(Path.home() / ".cache/ms-playwright/chromium-*/chrome-linux64/chrome")))
-    return found[-1] if found else None
+    roots = [os.environ.get("PLAYWRIGHT_BROWSERS_PATH"), Path.home() / ".cache/ms-playwright",
+             Path(__file__).resolve().parents[3] / "tools/ms-playwright"]
+    for root in filter(None, roots):
+        found = sorted(glob.glob(str(Path(root) / "chromium-*/chrome-linux64/chrome")))
+        if found:
+            return found[-1]
+    return None
+
+
+def chromium_path_dir(work: Path) -> str | None:
+    """A directory holding a ``chromium`` symlink (for modules that look it up on PATH), or None."""
+    exe = chromium_executable()
+    if not exe or shutil.which("chromium"):
+        return None
+    d = work / ".bin"
+    d.mkdir(parents=True, exist_ok=True)
+    link = d / "chromium"
+    if not link.exists():
+        link.symlink_to(exe)
+    return str(d)
 
 
 def _render_page(page: Path, times: list[float], enc: Optional[Encoder] = None, keep: tuple = ()) -> dict:

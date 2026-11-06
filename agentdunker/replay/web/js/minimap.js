@@ -250,7 +250,7 @@ export class Minimap {
     }
     g.fillStyle = '#fff';
     g.fillRect(x(t) - 1, y - 4, 2, 16);
-    g.font = '16px system-ui';
+    g.font = '16px system-ui,"AdkCJK",sans-serif';
     g.textBaseline = 'middle';
     g.fillStyle = 'rgba(223, 246, 255, 0.7)';
     g.textAlign = 'left';
@@ -347,7 +347,7 @@ export class Minimap {
       g.fill();
       g.globalAlpha = 1;
       g.fillStyle = '#021016';
-      g.font = `bold ${Math.round((off ? 0.42 : 0.36) * s)}px system-ui`;
+      g.font = `bold ${Math.round((off ? 0.42 : 0.36) * s)}px system-ui,"AdkCJK",sans-serif`;
       g.textAlign = 'center';
       g.textBaseline = 'middle';
       g.fillText(String(p.num).replace('X', ''), x, y + 0.5);

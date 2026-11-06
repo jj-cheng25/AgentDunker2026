@@ -7,6 +7,11 @@ python -m agentdunker.replay clip.mp4 --tracks tracks.json --court court.json \
     [--annotations annotations.json] [--compare out/side_by_side.mp4] [--workers 3] [--width 1920 --height 1080 --fps 30] [--no-pip]
 ```
 
+Needs `ffmpeg` and a Chromium on PATH (`chromium`, `chromium-browser` or `google-chrome`), or set
+`ADK_CHROMIUM=/path/to/chrome` (e.g. the Playwright build: `python -m playwright install chromium`).
+Chinese labels use the bundled `agent/fonts/NotoSansSC-Regular.otf` (OFL), served to the page as a web font, so no
+system CJK font is needed; override with `ADK_CJK_FONT=/path/to/font`.
+
 `--annotations` (tactical graphics: screen, pass, cut, drive, help …): `{"annotations": [...], "clock": "replay"}` in the
 renderer format of the hackathon play.json (types `arrow` (path {who, t} or from/to), `zone` (circle at/r, poly points,
 preset paint), `link` (ids), `focus` (who), `label` (at, text); colours `off def warn good gold ball`). Players are

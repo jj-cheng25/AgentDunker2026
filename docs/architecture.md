@@ -35,8 +35,7 @@ lands in `report.json`. Worst case: live play with the broadcast sound (plus int
   records (logger `agentdunker.<stage>.*`) and prints go to `work/logs/<stage>.log`.
 - **subprocess (`--isolate`)**: `python -m agentdunker.<stage>` per stage, the original M7 runner (timeouts,
   one retry after an OOM kill or a network-disk error).
-- **presets**: `runner.PRESETS` adds stage arguments (`fast`: `--detector yolo11m.pt --imgsz 960 --det-hz 10` for
-  tracking, `--no-pose` for events). `--threads` replaces every stage's thread option and the BLAS/OpenMP caps.
+- **presets**: `runner.PRESETS` adds stage arguments (`fast`: `--detector yolo11m.pt --det-hz 10` for tracking). `--threads` replaces every stage's thread option and the BLAS/OpenMP caps.
 
 ## Providers
 

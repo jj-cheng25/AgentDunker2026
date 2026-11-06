@@ -37,10 +37,10 @@ MODULES = {
     "m1": ("adk-cmd-m1", "4f7005f", "adk_tracking", "tracking"),
     "m2": ("adk-cmd-m2", "85772b7", "adk_court", "court"),
     "m3": ("adk-cmd-m3", "447097e", "adk_identity", "identity"),
-    "m4": ("adk-cmd-m4", "7c5dbe5", "adk_replay", "replay"),
+    "m4": ("adk-cmd-m4", "bd52595", "adk_replay", "replay"),
     "m5": ("adk-cmd-m5", "e98e145", "adk_events", "events"),
     "m6": ("adk-cmd-m6", "dc2fdba", "adk_narration", "narration"),
-    "m7": ("adk-cmd-m7", "4e1735f", "agentdunker", "film"),
+    "m7": ("adk-cmd-m7", "cf8ddb8", "agentdunker", "film"),
 }
 
 # Development / benchmark helpers that read the private bench ($CMD) or are not used by the film.
@@ -112,6 +112,9 @@ RULES: list[Rule] = [
          "        from agentdunker.weights import serve_web_asset  # downloaded assets (Xbot.glb)\n"
          "        if not serve_web_asset(self, WEB_ROOT):\n"
          "            super().do_GET()\n", "Xbot.glb is a downloaded asset"),
+    Rule("m4", "browser.py", 'CJK_FONT_CANDIDATES = (Path(__file__).resolve().parents[1] / "agent/fonts/NotoSansSC-Regular.otf",)',
+         'CJK_FONT_CANDIDATES = (__import__("agentdunker.weights", fromlist=["x"]).fonts_dir() / "NotoSansSC-Regular.otf",)',
+         "the CJK label font is a downloaded asset (Noto Sans CJK SC 2.004)"),
     Rule("m4", "browser.py", 'raise RuntimeError("chromium is required for the 3D replay renderer")',
          'from agentdunker.weights import chromium_path\n'
          '    if chromium_path():\n'

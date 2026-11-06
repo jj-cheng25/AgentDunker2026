@@ -118,7 +118,7 @@ function labelTexture(text, color) {
   if (labelCache.has(key)) return labelCache.get(key);
   const cv = document.createElement('canvas');
   const ctx = cv.getContext('2d');
-  const font = '600 44px "PingFang SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif';
+  const font = '600 44px "PingFang SC","Noto Sans CJK SC","Microsoft YaHei","AdkCJK",sans-serif';
   ctx.font = font;
   const w = Math.ceil(ctx.measureText(text).width) + 48;
   cv.width = w;
@@ -146,7 +146,7 @@ function badgeTexture(num, player, color) {
   const hex = `#${color.getHexString()}`;
   const cv = document.createElement('canvas');
   const ctx = cv.getContext('2d');
-  const font = '600 44px "PingFang SC","Noto Sans CJK SC","Microsoft YaHei",system-ui,sans-serif';
+  const font = '600 44px "PingFang SC","Noto Sans CJK SC","Microsoft YaHei","AdkCJK",system-ui,sans-serif';
   ctx.font = font;
   const nameW = player ? Math.ceil(ctx.measureText(player).width) + 32 : 0;
   const numW = num ? 94 : 14;   // no jersey known: name/team pill only

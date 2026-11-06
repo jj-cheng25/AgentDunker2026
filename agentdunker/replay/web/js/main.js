@@ -17,6 +17,8 @@ import { resolveNames, paletteLabels } from './roster.js';
 import { sampleMotion } from './motion.js';
 import { actorWindowEnvelope, actorSafeRect, fitActorCamera, applyActorCamera, actorScreenBounds } from './camera-fit.js';
 
+await document.fonts.load('600 44px "AdkCJK"', '战术复盘进攻防守').catch(() => {});
+
 const exportMode = new URLSearchParams(location.search).get('export') === '1';
 if (exportMode) document.body.classList.add('export');
 const COLORS = { off: new THREE.Color(0x35e6ff), def: new THREE.Color(0xff9a2e) };

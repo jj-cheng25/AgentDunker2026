@@ -60,6 +60,7 @@ class Run:
         self.elements: dict[str, dict] = {}
         self.notes: list[str] = []
         self.dropped_lines: list[dict] = []
+        self.trimmed_lines: list[dict] = []
         self.data_events: Optional[dict] = None
 
     # ------------------------------------------------------------ helpers
@@ -179,6 +180,9 @@ class Run:
             args += ["--start", w0, "--end", w1]
         if (self.work / "identity.json").exists():
             args += ["--identity", self.work / "identity.json"]
+        title = edl["decisions"].get("replay_title")
+        if title and _m4_supports("--title"):
+            args += ["--title", title]
         annos = edl["decisions"].get("annotations") or []
         if annos:
             ap = _dump(self.work / "annotations_m4.json", {"annotations": annos})
@@ -186,8 +190,10 @@ class Run:
                 args += ["--annotations", ap]
             else:
                 self.notes.append(f"{len(annos)} 3D annotations prepared (work/annotations_m4.json); M4 has no --annotations option yet")
+        bin_dir = promo.chromium_path_dir(self.work)      # M4 looks for `chromium` on PATH
+        env = {"PATH": f"{bin_dir}:{os.environ.get('PATH', '')}"} if bin_dir else None
         res = run_module("replay", "m4", [*args, "-o", out], out, self.work, inputs=[ev_path, self.work / "tracks.json"],
-                         timeout=3600)
+                         timeout=3600, env=env)
         self.mods["replay"] = res
         rj = _load(out.with_name("replay.json")) if res.ok else None
         if rj is not None and not rj.get("ok"):
@@ -195,46 +201,44 @@ class Run:
             return None
         return rj
 
-    def check_claims(self, edl: dict, lines: list[dict]) -> list[dict]:
-        """Drop commentary lines whose action words have no measured support (e.g. 虚晃 with no event)."""
-        from .facts import unsupported_words
-        support = {f["type"] for f in edl["decisions"].get("facts") or []}
-        ev = (self.data_events or {}).get("events", [])
-        support |= {e["type"] for e in ev if float(e.get("conf") or 0) >= director.EVENT_CONF}
-        kept = []
-        for l in lines:
-            bad = unsupported_words(l["text"], support)
-            if bad:
-                self.dropped_lines.append({"text": l["text"], "unsupported": bad})
-                self.notes.append(f"commentary line dropped (unsupported {'/'.join(bad)}): {l['text']}")
-            else:
-                kept.append(l)
-        return kept
+    def check_claims(self, edl: dict, pieces: list, lines: list[dict]) -> tuple[list, list[dict]]:
+        """Cut unsupported clauses / drop unsupported lines (claims.py); recorded in report.json."""
+        from . import claims
+        pieces, lines, dropped, trimmed = claims.check(edl, self.data_events, pieces, lines)
+        for d in dropped:
+            self.dropped_lines.append(d)
+            self.notes.append(f"commentary line dropped (unsupported {'/'.join(d['unsupported'])}): {d['text']}")
+        for t in trimmed:
+            self.trimmed_lines.append(t)
+            self.notes.append(f"commentary clause cut (unsupported {'/'.join(t['unsupported'])}): {t['from']} → {t['to']}")
+        return pieces, lines
 
     # ------------------------------------------------------------ audio-first 3D timing
     def retime(self, edl: dict, narration: Optional[dict]) -> list[tuple[float, np.ndarray]]:
         """Phase lengths follow their narration line (speed 0.5–1.0×); later segments and lines shift."""
         body = director.INTRO_S
         lines = [l for l in (narration or {}).get("lines", []) if l.get("text")]
-        lines = self.check_claims(edl, lines)
         vo = read_wav(narration["_vo"]) if narration and narration.get("_vo") else None
         pieces = voice_pieces(vo, lines) if vo is not None else []
+        pieces, lines = self.check_claims(edl, pieces, lines)
         rep = director.seg(edl, "replay")
         shift_of = {}
         if rep:
             r0 = rep["film"][0] - body
             new_knots, out_t, delta_acc = [], 0.0, 0.0
-            for ph, (ft, _) in zip(rep["phases"], rep["time_map"]):
+            for i, (ph, (ft, _)) in enumerate(zip(rep["phases"], rep["time_map"])):
+                pref = director.REPLAY_FINAL_SPEED if i == len(rep["phases"]) - 1 else director.REPLAY_PREFERRED_SPEED
                 p0, p1 = r0 + ft, r0 + ft + ph["film_len"]
                 mine = [l for l in lines if p0 - 0.2 <= l["start"] < p1 - 0.2]
                 src = ph["src"][1] - ph["src"][0]
                 need = (max(l["end"] for l in mine) - p0 + 0.45) if mine else ph["film_len"]
-                new_len = float(np.clip(max(need, src / director.REPLAY_PREFERRED_SPEED),
+                new_len = float(np.clip(max(need, src / pref),
                                         src / director.REPLAY_MAX_SPEED, src / director.REPLAY_MIN_SPEED))
                 for l in mine:
                     shift_of[id(l)] = (r0 + out_t) - p0
                 ph["film_len_planned"], ph["film_len"] = ph["film_len"], round(new_len, 3)
-                ph["line"] = mine[0]["text"] if mine else ""
+                ph["line"] = "".join(l["text"] for l in mine) if sum(len(l["text"]) for l in mine) <= 26 else (
+                    mine[0]["text"] if mine else "")
                 new_knots.append([round(out_t, 3), ph["src"][0]])
                 out_t += new_len
             w1 = rep["source"][1]
@@ -297,7 +301,9 @@ class Run:
                     subs = []
                     u = 0.0
                     for ph in s["phases"]:
-                        text = ph.get("line") or ""
+                        # Subtitles follow the phases (as in the reference); a phase whose line was dropped
+                        # keeps its fact-derived description, silently.
+                        text = ph.get("line") or ph.get("desc") or ""
                         if text:
                             subs.append((u + 0.1, u + ph["film_len"] - 0.07, text))
                         u += ph["film_len"]

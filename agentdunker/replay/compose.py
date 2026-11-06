@@ -25,9 +25,10 @@ COLORS = {"off": (53, 230, 255), "def": (255, 154, 46)}
 
 
 def _font(size: int):
-    for p in FONT_PATHS:
-        if Path(p).exists():
-            return ImageFont.truetype(p, size)
+    from .browser import _cjk_font  # same bundled CJK font as the 3D page
+    for p in [_cjk_font(), *FONT_PATHS]:
+        if p and Path(p).exists():
+            return ImageFont.truetype(str(p), size)
     return ImageFont.load_default()
 
 

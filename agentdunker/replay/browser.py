@@ -12,6 +12,7 @@ import http.server
 import io
 import json
 import logging
+import os
 import shutil
 import subprocess
 import tempfile
@@ -29,6 +30,16 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 WEB_ROOT = Path(__file__).resolve().parent / "web"
+# CJK font for labels, served to the page as /fonts/cjk.otf so the render never depends on system fonts.
+CJK_FONT_CANDIDATES = (__import__("agentdunker.weights", fromlist=["x"]).fonts_dir() / "NotoSansSC-Regular.otf",)
+
+
+def _cjk_font() -> Optional[Path]:
+    for p in ([Path(os.environ["ADK_CJK_FONT"])] if os.environ.get("ADK_CJK_FONT") else []) + list(CJK_FONT_CANDIDATES):
+        if p.is_file():
+            return p
+    logger.warning("no CJK font found (set ADK_CJK_FONT); Chinese labels fall back to system fonts")
+    return None
 
 
 class _CDP:
@@ -69,6 +80,18 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(self.play_bytes)
             return
+        if urllib.parse.urlsplit(self.path).path == "/fonts/cjk.otf":
+            font = _cjk_font()
+            if font is None:
+                self.send_error(404)
+                return
+            body = font.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "font/otf")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         from agentdunker.weights import serve_web_asset  # downloaded assets (Xbot.glb)
         if not serve_web_asset(self, WEB_ROOT):
             super().do_GET()
@@ -78,6 +101,9 @@ class _Handler(http.server.SimpleHTTPRequestHandler):
 
 
 def _chromium() -> str:
+    override = os.environ.get("ADK_CHROMIUM")
+    if override:
+        return override
     for name in ("chromium", "chromium-browser", "google-chrome"):
         path = shutil.which(name)
         if path:

@@ -21,7 +21,7 @@ STEP = 0.1
 @dataclass
 class Fact:
     id: str
-    type: str                     # pass | screen | drive | cut | closeout | help
+    type: str                     # pass | screen | drive | cut | closeout | help | space
     t0: float
     t1: float
     actors: list
@@ -175,13 +175,47 @@ def derive(tracks: dict, court: dict, events: dict, fps: float, w0: float, w1: f
                 if da - db >= 2.0 and db <= 3.0:
                     add("help", grid[a], grid[b], [q, h], f"{name(q, '防守人')}协防", 0.6,
                         from_m=round(da, 1), to_m=round(db, 1))
+    # Spacing: the holder is ≥ 6 m from the basket, all four teammates are ≥ 4 m from him and they stand on
+    # both sides of the holder→basket line (≥ 1.5 m off it), held for ≥ 1.5 s. At most two, ≥ 2 s apart.
+    run, n_space = [], 0
+    def close_run():
+        nonlocal n_space
+        if len(run) >= 15 and n_space < 2 and not any(f.type == "space" and run[0][0] - f.t1 < 2.0 for f in facts):
+            h0, mid = run[0][1], idx(run[len(run) // 2][0])
+            five = list(run[0][4])
+            ring = sorted(five, key=lambda m: np.arctan2(*(P[m][mid] - np.mean([P[q][mid] for q in five], axis=0))[::-1]))
+            add("space", run[0][0], run[-1][0], ring, f"队友拉开到两侧，{name(h0, '持球人')}持球", 0.6, holder=h0,
+                min_mate_m=round(min(r[2] for r in run), 1), spacing_m=round(float(np.mean([r[3] for r in run])), 1))
+            n_space += 1
+    for i in range(i0, i1 + 1):
+        t, h = grid[i], _holder_at(events, grid[i])
+        ok_t, row = False, None
+        if h in P and h in off and not np.isnan(P[h][i]).any():
+            mates = [m for m in off if m != h and not np.isnan(P[m][i]).any()]
+            pos = [P[m][i] for m in mates]
+            v = basket - P[h][i]
+            dh = np.linalg.norm(v)
+            if dh >= 6.0 and len(mates) == 4:
+                u = v / dh
+                side = [float(u[0] * (q - P[h][i])[1] - u[1] * (q - P[h][i])[0]) for q in pos]
+                dmin = min(np.linalg.norm(q - P[h][i]) for q in pos)
+                allp = [P[h][i], *pos]
+                spacing = np.mean([np.linalg.norm(a - b) for k, a in enumerate(allp) for b in allp[k + 1:]])
+                if dmin >= 4.0 and max(side) >= 1.5 and min(side) <= -1.5:
+                    ok_t, row = True, (t, h, dmin, spacing, tuple(sorted([h, *mates])))
+        if ok_t and (not run or run[-1][1::3] == row[1::3]):
+            run.append(row)
+        else:
+            close_run()
+            run = [row] if ok_t else []
+    close_run()
     facts.sort(key=lambda f: f.t0)
     for k, f in enumerate(facts):
         f.id = f"F{k + 1}"
     return facts
 
 
-ANNO_COLOR = {"pass": "ball", "drive": "off", "cut": "off", "screen": "gold", "closeout": "warn", "help": "def"}
+ANNO_COLOR = {"space": "good", "pass": "ball", "drive": "off", "cut": "off", "screen": "gold", "closeout": "warn", "help": "def"}
 
 
 def annotations(facts: list[Fact], w0: float) -> list[dict]:
@@ -201,19 +235,16 @@ def annotations(facts: list[Fact], w0: float) -> list[dict]:
                         "color": "def", "dashed": True, "label": f.text})
         elif f.type == "closeout":
             out.append({"type": "focus", "who": a[0], "t": [t0, t1 + 0.6], "color": "warn", "label": f.text})
+        elif f.type == "space":                 # closed outline through the five attackers, ordered by angle
+            out.append({"type": "link", "ids": a[:1] + a[1:], "closed": True, "t": [t0, t1 + 0.4],
+                        "color": "good", "label": f.text})
         elif f.type == "screen":
             out.append({"type": "zone", "shape": "circle", "at": a[0], "r": 0.9, "t": [t0, t1 + 0.4],
                         "color": "gold", "label": f.text})
     return out
 
 
-# Action words the commentary may only use when a fact (or the shot record) supports them.
-ACTION_WORDS = {"虚晃": None, "假动作": None, "变向": None, "背身": None, "转身": None, "后撤步": None,
-                "欧洲步": None, "胯下": None, "背后运球": None, "急停": None, "扣篮": None, "补扣": None,
-                "空切": "cut", "切入": "cut", "切走": "cut", "掩护": "screen", "挡拆": "screen",
-                "扑防": "closeout", "扑出": "closeout", "扑上": "closeout", "协防": "help", "包夹": "help",
-                "突破": "drive", "回传": "pass", "传球": "pass", "分球": "pass", "传给": "pass"}
-
-
 def unsupported_words(text: str, support: set[str]) -> list[str]:
-    return [w for w, need in ACTION_WORDS.items() if w in text and (need is None or need not in support)]
+    """Action / tactical words in ``text`` that the fact types in ``support`` do not back (see claims.py)."""
+    from .claims import unsupported
+    return unsupported(text, support)
