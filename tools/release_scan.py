@@ -29,7 +29,13 @@ SECRET = [
     (re.compile(rb"(?i)(api[_-]?key|secret|token|password)\s*[=:]\s*['\"][A-Za-z0-9_\-]{16,}['\"]"), "hard-coded credential"),
 ]
 PATHS = re.compile(rb"/inspire/|/root/\.config|nba_hackathon")
-MAGIC = [(b"\x00\x00\x00", b"ftyp", "MP4/MOV video"), (b"RIFF", None, "RIFF (wav/avi)"), (b"\x1aE\xdf\xa3", None, "Matroska")]
+MAGIC = [(b"\x00\x00\x00", b"ftyp", "MP4/MOV video"), (b"\x1aE\xdf\xa3", None, "Matroska")]
+RIFF_MEDIA = (b"WAVE", b"AVI ")                     # RIFF/WEBP is an image and fine
+# Reviewed exceptions to the 2 MB rule, pinned by git blob id: a replaced file is flagged again.
+ALLOW_LARGE = {
+    # README animation: our own 3D render with the broadcast inset masked (4.8 MB)
+    "docs/media/replay.webp": "fde68835809320fc33ea314e0ad5920bfd7620f3",
+}
 ALLOW_PATHS = {"tools/release_scan.py", "tools/sync_modules.py"}   # the scanner and the sync rules name them on purpose
 
 
@@ -55,10 +61,13 @@ def main() -> int:
         if not p.is_file():
             continue
         data = p.read_bytes()
-        if len(data) > MAX_BYTES:
+        allowed = ALLOW_LARGE.get(rel) == git("hash-object", str(p)).decode().strip()
+        if len(data) > MAX_BYTES and not allowed:
             findings.append(f"{rel}: {len(data) / 1e6:.1f} MB (> 2 MB)")
         if BAD_EXT.search(rel):
             findings.append(f"{rel}: media/weights extension")
+        if data.startswith(b"RIFF") and data[8:12] in RIFF_MEDIA:
+            findings.append(f"{rel}: looks like RIFF {data[8:12].decode()} (audio/video)")
         for a, b, what in MAGIC:
             if data.startswith(a) and (b is None or data[4:8] == b):
                 findings.append(f"{rel}: looks like {what}")
@@ -75,6 +84,8 @@ def main() -> int:
         if not name:
             continue
         size = int(git("cat-file", "-s", sha))
+        if ALLOW_LARGE.get(name) == sha:
+            continue
         if size > MAX_BYTES or BAD_EXT.search(name):
             findings.append(f"history: {name} ({size / 1e6:.1f} MB)")
     hist = git("log", "--all", "-p", "--no-color")
