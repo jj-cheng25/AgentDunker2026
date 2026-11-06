@@ -9,7 +9,7 @@ description = "NBA broadcast clip in, narrated holographic 3D tactical breakdown
 readme = "README_en.md"
 requires-python = ">=3.10"
 license = { text = "AGPL-3.0-only" }
-authors = [{ name = "AgentDunker team (Fudan University × Shanghai Innovation Institute × MOSI)" }]
+authors = [{ name = "AgentDunker team (Shanghai Innovation Institute × Fudan University × MOSI)" }]
 keywords = ["basketball", "nba", "sports analytics", "tracking", "3d", "video", "commentary", "agent"]
 classifiers = [
   "License :: OSI Approved :: GNU Affero General Public License v3",
