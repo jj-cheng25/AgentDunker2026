@@ -19,7 +19,8 @@ def test_env_and_file_precedence(tmp_path, monkeypatch):
     f.write_text('[llm]\nprovider = "openai"\nfast_model = "m-file"\n[run]\nthreads = 4\n')
     monkeypatch.setenv("ADK_CONFIG", str(f))
     monkeypatch.setenv("ADK_LLM_FAST_MODEL", "m-env")
-    config.load.cache_clear(); config.llm.cache_clear()
+    config.load.cache_clear()
+    config.llm.cache_clear()
     assert config.llm().provider == "openai"
     assert config.llm().fast_model == "m-env"          # env beats file
     assert config.llm().strong_model == "gpt-5"        # provider default

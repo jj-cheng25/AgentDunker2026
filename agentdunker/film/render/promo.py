@@ -148,8 +148,15 @@ def fixed_clip(name: str) -> Path:
 
 def fixed_audio(name: str) -> Path:
     """Intro score is 8 s (its last 2 s play under the start of the live segment); outro 6 s."""
-    return build_fixed() / f"{name}_score.wav"
+    try:
+        return build_fixed() / f"{name}_score.wav"
+    except Exception as e:  # noqa: BLE001  (no Chromium / fonts: the film goes on without intro and outro)
+        logger.warning("intro/outro unavailable: %s", str(e).splitlines()[0][:200])
+        return None
 
 
 def cover() -> Path:
-    return build_fixed() / "cover.png"
+    try:
+        return build_fixed() / "cover.png"
+    except Exception:  # noqa: BLE001  (compose() embeds the cover only if it exists)
+        return Path("/nonexistent/cover.png")

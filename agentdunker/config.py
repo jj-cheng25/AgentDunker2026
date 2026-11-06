@@ -11,11 +11,12 @@ from __future__ import annotations
 
 import copy
 import os
-import tomllib
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Optional
+
+import tomllib
 
 HOME_CACHE = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache")) / "agentdunker"
 
@@ -146,7 +147,8 @@ def apply() -> None:
     cache = path("cache_dir")
     env = {
         # thread caps (torch / onnxruntime / OpenCV / BLAS)
-        "OMP_NUM_THREADS": n, "MKL_NUM_THREADS": n, "OPENBLAS_NUM_THREADS": n, "ADK_THREADS": n, "ADK_DEVICE": str(c["run"].get("device", "auto")),
+        "OMP_NUM_THREADS": n, "MKL_NUM_THREADS": n, "OPENBLAS_NUM_THREADS": n, "ADK_THREADS": n,
+        "ADK_DEVICE": str(c["run"].get("device", "auto")),
         # weights and data
         "ADK_MODEL_DIR": str(path("model_dir")), "ADK_NBA_DATA": str(path("nba_data")),
         "ADK_COURT_MODEL": str(path("model_dir") / "court-33-yolo11m-pose.onnx"),
@@ -165,6 +167,9 @@ def apply() -> None:
     }
     if l.provider == "mosshub":
         env["MOSSHUB_BASE_URL"] = l.base_url
+    clip = path("model_dir") / "clip-vit-large-patch14"
+    if (clip / "model.safetensors").is_file():    # downloaded by `agentdunker download-models`
+        env["ADK_CLIP_MODEL"] = str(clip)
     if c["paths"].get("hf_home"):              # optional: where CLIP is cached (default: Hugging Face default)
         env["HF_HOME"] = str(Path(c["paths"]["hf_home"]).expanduser())
     os.environ.update(env)

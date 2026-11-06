@@ -17,7 +17,7 @@ def test_registry_is_complete():
     names = [a.name for a in weights.ASSETS]
     assert len(names) == len(set(names))
     for a in weights.ASSETS:
-        assert len(a.sha256) == 64 and a.size > 0 and a.license and a.url.startswith("https://")
+        assert len(a.sha256) == 64 and a.size > 0 and a.license and a.url.startswith(("https://", "hf://"))
     for p in ("fast", "quality"):                        # each preset has exactly one person detector
         assert sum(1 for a in weights.ASSETS if a.name.startswith("yolo11") and "pose" not in a.name and p in a.presets) == 1
 

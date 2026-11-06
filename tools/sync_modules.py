@@ -122,6 +122,17 @@ RULES: list[Rule] = [
          '    from agentdunker.weights import chromium_path\n    if chromium_path():\n        return chromium_path()\n',
          "one Chromium lookup for the whole package"),
 
+    # ------------------------------------------------------------------ always a film (M7 robustness)
+    Rule("m7", "render/promo.py", '    return build_fixed() / f"{name}_score.wav"\n',
+         '    try:\n        return build_fixed() / f"{name}_score.wav"\n'
+         '    except Exception as e:  # noqa: BLE001  (no Chromium / fonts: the film goes on without intro and outro)\n'
+         '        logger.warning("intro/outro unavailable: %s", str(e).splitlines()[0][:200])\n        return None\n',
+         "no Chromium must drop intro/outro, not the film (build_mix accepts None)"),
+    Rule("m7", "render/promo.py", 'def cover() -> Path:\n    return build_fixed() / "cover.png"\n',
+         'def cover() -> Path:\n    try:\n        return build_fixed() / "cover.png"\n'
+         '    except Exception:  # noqa: BLE001  (compose() embeds the cover only if it exists)\n'
+         '        return Path("/nonexistent/cover.png")\n', "no Chromium must not fail the mux"),
+
     # ------------------------------------------------------------------ GPU when available (agentdunker.device)
     Rule("m1", "models.py", "        self.model.load_state_dict(state)\n",
          "        self.model.load_state_dict(state)\n        self.model.to(_device())\n", "ReID on GPU when available"),
@@ -225,7 +236,7 @@ def apply_rules(mod: str, files: dict[str, bytes]) -> list[dict]:
         n = len(re.findall(r.old, text)) if r.regex else text.count(r.old)
         if n != r.count:
             raise SystemExit(f"rule for {mod}/{r.file} matched {n}x (expected {r.count}): {r.why}\n  old: {r.old[:120]!r}")
-        text = re.sub(r.old, lambda _m: r.new, text) if r.regex else text.replace(r.old, r.new)
+        text = re.sub(r.old, lambda _m, new=r.new: new, text) if r.regex else text.replace(r.old, r.new)
         files[r.file] = text.encode()
         applied.append({"file": r.file, "why": r.why})
     return applied

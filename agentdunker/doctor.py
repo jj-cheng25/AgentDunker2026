@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import importlib
-import os
 import platform
 import shutil
 import subprocess
@@ -64,14 +63,18 @@ def doctor(verify: bool = False) -> int:
     _line(True, "threads", str(config.threads()))
     print(f"weights in {weights.model_dir()}")
     preset = config.get()["run"]["preset"]
-    for a in weights.ASSETS:
+    clip = [a for a in weights.ASSETS if a.kind == "clip"]
+    for a in [a for a in weights.ASSETS if a.kind != "clip"] + clip[-1:]:
+        if a.kind == "clip":
+            bad = [c.name for c in clip if weights.status(c, verify=verify) != "ok"]
+            ok &= _line(not bad, "CLIP ViT-L/14", "ok · MIT" if not bad else f"missing {', '.join(bad)}",
+                        "agentdunker download-models")
+            continue
         st = weights.status(a, verify=verify)
         need = preset in a.presets
         ok &= _line(True if st == "ok" else (False if need else None), a.name,
                     f"{st} · {a.license.split(' (')[0]}" + ("" if need else f" · only for {'/'.join(a.presets)}"),
                     "agentdunker download-models")
-    for repo, lic, _ in weights.HF_MODELS:
-        ok &= _line(weights.hf_cached(repo), repo, f"Hugging Face cache · {lic}", "agentdunker download-models")
     print("services")
     svc = providers.available()
     l = config.llm()

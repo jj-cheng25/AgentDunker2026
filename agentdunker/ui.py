@@ -22,9 +22,9 @@ def _job_dir(video: str) -> Path:
 
 
 def _run(video: str, preset: str, voice: bool):
+    from . import runner
     from .cli import LABELS
     from .run import make_film
-    from . import runner
 
     config.override(run={"preset": preset}, voice={"backend": "moss" if voice else "none"})
     q: "queue.Queue" = queue.Queue()

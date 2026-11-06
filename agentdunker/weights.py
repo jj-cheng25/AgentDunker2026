@@ -13,6 +13,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,6 +25,8 @@ logger = logging.getLogger(__name__)
 
 UL = "https://github.com/ultralytics/assets/releases/download/v8.3.0"
 GF = "https://raw.githubusercontent.com/google/fonts/24ddc1f324cac5d9f5aedca126d298f56e3f1640/ofl"
+CLIP_DIR = "clip-vit-large-patch14"
+CLIP_REV = "32bd64288804d66eefd0ccbe215aa642df71cc41"
 THREE = "https://raw.githubusercontent.com/mrdoob/three.js/0d6115556e60cb940b3063307549ea95a2dfe82b"
 
 
@@ -40,7 +43,8 @@ class Asset:
 
     def path(self) -> Path:
         base = config.path("model_dir")
-        return base / "fonts" / self.name if self.kind == "font" else base / self.name
+        sub = {"font": "fonts", "clip": CLIP_DIR}.get(self.kind)
+        return base / sub / self.name if sub else base / self.name
 
 
 ASSETS: list[Asset] = [
@@ -84,7 +88,19 @@ ASSETS: list[Asset] = [
           "d8694f65cd70c3e5e600ead37657aab0adb5f63b275d0c1f6f4a7046de222145", 112196, "SIL OFL 1.1",
           "film: numbers", kind="font"),
 ]
-HF_MODELS = [("openai/clip-vit-large-patch14", "MIT", "tracking: zero-shot player / referee / other roles")]
+# CLIP ViT-L/14 (OpenAI, MIT): zero-shot player / referee / other roles. Plain files at a pinned revision, so a
+# Hugging Face mirror (HF_ENDPOINT, e.g. https://hf-mirror.com) works without the hub client.
+_CLIP = {"config.json": ("8a09b467700c58138c29d53c605b34ebc69beaadd13274a8a2af8ad2c2f4032a", 4519),
+         "merges.txt": ("9fd691f7c8039210e0fced15865466c65820d09b63988b0174bfe25de299051a", 524619),
+         "preprocessor_config.json": ("910e70b3956ac9879ebc90b22fb3bc8a75b6a0677814500101a4c072bd7857bd", 316),
+         "special_tokens_map.json": ("f8c0d6c39aee3f8431078ef6646567b0aba7f2246e9c54b8b99d55c22b707cbf", 389),
+         "tokenizer.json": ("a83e0809aa4c3af7208b2df632a7a69668c6d48775b3c3fe4e1b1199d1f8b8f4", 2224003),
+         "tokenizer_config.json": ("deef455e52fa5e8151e339add0582e4235f066009601360999d3a9cda83b1129", 905),
+         "vocab.json": ("3f0c4f7d2086b61b38487075278ea9ed04edb53a03cbb045b86c27190fa8fb69", 961143),
+         "model.safetensors": ("a2bf730a0c7debf160f7a6b50b3aaf3703e7e88ac73de7a314903141db026dcb", 1710540580)}
+ASSETS += [Asset(n, f"hf://openai/clip-vit-large-patch14/resolve/{CLIP_REV}/{n}", h, sz, "MIT (OpenAI CLIP)",
+                 "tracking: zero-shot player / referee / other roles (CLIP ViT-L/14)", kind="clip")
+           for n, (h, sz) in _CLIP.items()]
 BY_NAME = {a.name: a for a in ASSETS}
 
 
@@ -117,19 +133,59 @@ def status(a: Asset, verify: bool = False) -> str:
     return "ok"
 
 
-def _fetch(url: str, dst: Path) -> None:
+def clip_dir() -> Path:
+    return model_dir() / CLIP_DIR
+
+
+def _fetch(url: str, dst: Path, size: int = 0) -> None:
+    if url.startswith("hf://"):
+        url = os.environ.get("HF_ENDPOINT", "https://huggingface.co").rstrip("/") + "/" + url[5:]
     tmp = dst.with_name(dst.name + ".part")
     if "drive.google.com" in url:
         try:
-            import gdown                               # handles the Drive confirmation page
+            import gdown  # handles the Drive confirmation page
             gdown.download(url, str(tmp), quiet=True)
         except ImportError:
             urllib.request.urlretrieve(url, tmp)
+    elif size >= 200_000_000:
+        _fetch_ranges(url, tmp, size)
     else:
         req = urllib.request.Request(url, headers={"User-Agent": "agentdunker-download"})
         with urllib.request.urlopen(req, timeout=60) as r, open(tmp, "wb") as f:
             shutil.copyfileobj(r, f, 1 << 20)
     os.replace(tmp, dst)
+
+
+def _fetch_ranges(url: str, tmp: Path, size: int, parts: int = 8) -> None:
+    """Large files: ``parts`` parallel HTTP range requests (mirrors often throttle each connection)."""
+    from concurrent.futures import ThreadPoolExecutor
+    with open(tmp, "wb") as f:
+        f.truncate(size)
+    step = -(-size // parts)
+
+    def get(i: int) -> None:
+        a, b = i * step, min(size, (i + 1) * step) - 1
+        for attempt in range(5):
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "agentdunker-download", "Range": f"bytes={a}-{b}"})
+                with urllib.request.urlopen(req, timeout=60) as r, open(tmp, "r+b") as f:
+                    if r.status != 206:
+                        raise OSError(f"server ignored the range request (HTTP {r.status})")
+                    f.seek(a)
+                    pos = a
+                    while chunk := r.read(1 << 20):
+                        f.write(chunk)
+                        pos += len(chunk)
+                    if pos != b + 1:
+                        raise OSError("short read")
+                return
+            except OSError:
+                if attempt == 4:
+                    raise
+                time.sleep(3 * (attempt + 1))
+
+    with ThreadPoolExecutor(parts) as ex:
+        list(ex.map(get, range(parts)))
 
 
 def download(names: Optional[Iterable[str]] = None, preset: Optional[str] = None, force: bool = False,
@@ -143,9 +199,10 @@ def download(names: Optional[Iterable[str]] = None, preset: Optional[str] = None
         if not force and status(a, verify=True) == "ok":
             log(f"  ok        {a.name}")
             continue
-        log(f"  download  {a.name} ({a.size / 1e6:.1f} MB) ← {a.url.split('/')[2]}")
+        host = os.environ.get("HF_ENDPOINT", "huggingface.co") if a.url.startswith("hf://") else a.url.split("/")[2]
+        log(f"  download  {a.name} ({a.size / 1e6:.1f} MB) ← {host.removeprefix('https://')}")
         try:
-            _fetch(a.url, p)
+            _fetch(a.url, p, a.size)
         except Exception as e:  # noqa: BLE001
             log(f"  FAILED    {a.name}: {type(e).__name__}: {e}")
             failed.append(a.name)
@@ -155,27 +212,6 @@ def download(names: Optional[Iterable[str]] = None, preset: Optional[str] = None
             log(f"  FAILED    {a.name}: checksum mismatch (deleted)")
             failed.append(a.name)
     return failed
-
-
-def download_hf(log=print) -> list[str]:
-    failed = []
-    for repo, _, _ in HF_MODELS:
-        try:
-            from huggingface_hub import snapshot_download
-            snapshot_download(repo, allow_patterns=["*.json", "*.txt", "model.safetensors"])
-            log(f"  ok        {repo} (Hugging Face cache)")
-        except Exception as e:  # noqa: BLE001
-            log(f"  FAILED    {repo}: {type(e).__name__}: {e}")
-            failed.append(repo)
-    return failed
-
-
-def hf_cached(repo: str) -> bool:
-    try:
-        from huggingface_hub import try_to_load_from_cache
-        return isinstance(try_to_load_from_cache(repo, "config.json"), str)
-    except Exception:  # noqa: BLE001
-        return False
 
 
 # ---------------------------------------------------------------- Chromium (3D replay, transition page)

@@ -1,0 +1,30 @@
+# AgentDunker configuration example. Copy to ./agentdunker.toml or ~/.config/agentdunker/config.toml.
+# Credentials are never written here: name the environment variable that holds them.
+
+[llm]
+provider = "mosshub"            # mosshub | openai | gemini | none
+# base_url = "http://localhost:8000/v1"   # e.g. a local vLLM / Ollama OpenAI-compatible server
+# fast_model = "gemini-3.8-flash"
+# strong_model = "gpt-6-astra"
+# key_env = "MOSSHUB_API_KEY"
+# responses_api = true          # false for servers without /v1/responses
+
+[voice]
+backend = "moss"                # moss | none (subtitles only)
+
+[moss]
+# base_url = "https://api.mosi.cn/v1"
+# key_env = "MOSS_API_KEY"
+# voice_id = "865098d7-ca3f-4463-945e-783425f655b3"   # Mossland 激情体育解说
+vl_checks = true
+
+[paths]
+# model_dir = "~/.cache/agentdunker/models"
+# cache_dir = "~/.cache/agentdunker/cache"
+# nba_data = "/data/nba"        # official PBP / boxscore / xFG / season tables (not shipped)
+
+[run]
+preset = "quality"              # quality | fast
+threads = 16
+runner = "inprocess"            # inprocess | subprocess
+device = "auto"                 # auto | cpu | cuda

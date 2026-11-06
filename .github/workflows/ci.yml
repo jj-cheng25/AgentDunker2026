@@ -1,0 +1,28 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ADK_LLM_PROVIDER: none      # never call a paid model in CI
+      ADK_VOICE: none
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: system packages
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg libsndfile1
+      - name: install (CPU torch, no weights)
+        run: |
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install -e '.[dev]'
+      - name: lint
+        run: ruff check agentdunker/*.py tests tools
+      - name: no large or forbidden files
+        run: |
+          big=$(git ls-files -z | xargs -0 du -k | awk '$1 > 2048 {print $2}')
+          test -z "$big" || { echo "files over 2 MB: $big"; exit 1; }
+          ! git ls-files | grep -E '\.(mp4|mov|mkv|wav|pt|pth|onnx|glb|ttf)$'
+      - name: tests (unit + synthetic smoke)
+        run: pytest -q
