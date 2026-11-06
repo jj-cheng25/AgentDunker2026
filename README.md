@@ -4,7 +4,7 @@
 
 <p>
 <a href="LICENSE"><img alt="license AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-ff8a3d?style=flat-square&labelColor=0b2233"></a>
-<img alt="python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-3fe0ff?style=flat-square&labelColor=0b2233&logo=python&logoColor=white">
+<img alt="python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3fe0ff?style=flat-square&labelColor=0b2233&logo=python&logoColor=white">
 <img alt="runs on CPU" src="https://img.shields.io/badge/runs_on-CPU-3fe0ff?style=flat-square&labelColor=0b2233">
 <img alt="offline mode" src="https://img.shields.io/badge/offline-ready-3fe0ff?style=flat-square&labelColor=0b2233">
 <img alt="3D Three.js" src="https://img.shields.io/badge/3D-Three.js-3fe0ff?style=flat-square&labelColor=0b2233&logo=threedotjs&logoColor=white">
@@ -13,7 +13,7 @@
 
 **给一段 NBA 转播进攻片段，全自动生成带激情中文解说的「十人全息 3D 战术复盘」短片。**
 
-[English](README_en.md) · [快速开始](#快速开始) · [工作原理](#工作原理) · [基准成绩](#基准成绩) · [架构文档](docs/architecture.md) · [数据合同](docs/contracts.md) · [配置](docs/configuration.md)
+[English](README_en.md) · [快速开始](#快速开始) · [工作原理](#工作原理) · [基准成绩](#基准成绩) · [性能](docs/performance.md) · [架构文档](docs/architecture.md) · [数据合同](docs/contracts.md) · [配置](docs/configuration.md)
 
 </div>
 
@@ -52,7 +52,7 @@ agentdunker run clip.mp4 -o out/      # → out/film.mp4 + out/report.json
 <table>
 <tr><th align="left">命令</th><th align="left">作用</th></tr>
 <tr><td><code>agentdunker run CLIP -o OUT [--preset fast|quality] [--threads N]</code></td><td>出片；显示每一步进度和耗时；中断后重跑会复用 <code>OUT/work/</code> 里的缓存</td></tr>
-<tr><td><code>agentdunker doctor</code></td><td>检查 Python 包、ffmpeg、Chromium、权重、API key、官方数据</td></tr>
+<tr><td><code>agentdunker doctor [--verify] [--ping]</code></td><td>检查 Python 包、ffmpeg、Chromium、权重、API key、官方数据；<code>--verify</code> 校验权重 sha256，<code>--ping</code> 确认 API key 可用（免费）</td></tr>
 <tr><td><code>agentdunker download-models</code></td><td>下载全部权重、字体、CLIP、Chromium，带来源 URL、sha256 和许可证</td></tr>
 <tr><td><code>agentdunker ui</code></td><td>本地网页：上传片段、看进度、预览和下载成片（需 <code>pip install -e '.[ui]'</code>）</td></tr>
 </table>
@@ -103,7 +103,7 @@ export MOSS_API_KEY=...      # 解说配音 + 回读校验、MOSS-VL 小判断
 
 数字取自各模块的验收记录；评分脚本和基准片段不在本仓库（含 NBA 录像）。
 
-**性能**：16 核 CPU、无 GPU 也能跑。`--preset fast` 用较小的检测器（YOLO11m、10 Hz 检测）；`--threads` 控制每个阶段的线程数。CPU 上 quality 预设一段 20 秒片段需要二三十分钟；GPU 路径会自动启用，但尚未在 GPU 机器上实测。
+**性能**：16 线程 CPU、无 GPU 即可运行。22 秒的 c01 片段：quality 预设、模型服务全部在线约 22 分钟（配音阶段受网络限制），离线约 10.5 分钟；`--preset fast` 离线约 8 分钟。`--preset fast` 用较小的检测器（YOLO11m、10 Hz 检测），其余与 quality 相同；`--threads` 控制每个阶段的线程数。各阶段耗时和 fast 在基准上的代价见 [docs/performance.md](docs/performance.md)。GPU 路径会自动启用，但尚未实测。
 
 <details>
 <summary><b>已知局限</b></summary>

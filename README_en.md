@@ -4,7 +4,7 @@
 
 <p>
 <a href="LICENSE"><img alt="license AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-ff8a3d?style=flat-square&labelColor=0b2233"></a>
-<img alt="python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-3fe0ff?style=flat-square&labelColor=0b2233&logo=python&logoColor=white">
+<img alt="python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3fe0ff?style=flat-square&labelColor=0b2233&logo=python&logoColor=white">
 <img alt="runs on CPU" src="https://img.shields.io/badge/runs_on-CPU-3fe0ff?style=flat-square&labelColor=0b2233">
 <img alt="offline mode" src="https://img.shields.io/badge/offline-ready-3fe0ff?style=flat-square&labelColor=0b2233">
 <img alt="3D Three.js" src="https://img.shields.io/badge/3D-Three.js-3fe0ff?style=flat-square&labelColor=0b2233&logo=threedotjs&logoColor=white">
@@ -13,7 +13,7 @@
 
 **Give it a 5–20 s NBA broadcast possession; get back a narrated breakdown film with a ten-player holographic 3D tactical replay — fully automatic.**
 
-[中文](README.md) · [Quick start](#quick-start) · [How it works](#how-it-works) · [Benchmark](#benchmark) · [Architecture](docs/architecture.md) · [Data contracts](docs/contracts.md) · [Configuration](docs/configuration.md)
+[中文](README.md) · [Quick start](#quick-start) · [How it works](#how-it-works) · [Benchmark](#benchmark) · [Performance](docs/performance.md) · [Architecture](docs/architecture.md) · [Data contracts](docs/contracts.md) · [Configuration](docs/configuration.md)
 
 </div>
 
@@ -56,7 +56,7 @@ Needs `ffmpeg` ≥ 6 with libx264 on the PATH.
 <table>
 <tr><th align="left">command</th><th align="left"></th></tr>
 <tr><td><code>agentdunker run CLIP -o OUT [--preset fast|quality] [--threads N]</code></td><td>make the film, with per-step progress and timing; a re-run resumes from <code>OUT/work/</code></td></tr>
-<tr><td><code>agentdunker doctor</code></td><td>Python packages, ffmpeg, Chromium, weights, API keys, official data</td></tr>
+<tr><td><code>agentdunker doctor [--verify] [--ping]</code></td><td>Python packages, ffmpeg, Chromium, weights, API keys, official data; <code>--verify</code> checks weight sha256, <code>--ping</code> checks the API keys are accepted (free)</td></tr>
 <tr><td><code>agentdunker download-models</code></td><td>weights, fonts, CLIP and Chromium, with source URL, sha256 and licence</td></tr>
 <tr><td><code>agentdunker ui</code></td><td>local web page: upload, progress, preview, download (<code>pip install -e '.[ui]'</code>)</td></tr>
 </table>
@@ -114,9 +114,11 @@ paced to them. Stages run in one process by default; `--isolate` runs each in it
 Numbers come from each module's acceptance record. The benchmark clips are NBA footage and are not part of this
 repository.
 
-**Performance**: runs on a 16-core CPU with no GPU. `--preset fast` uses a smaller detector (YOLO11m, detection at
-10 Hz); `--threads` caps every stage. CPU `quality` takes tens of minutes per 20 s clip. The GPU is used
-automatically when present, but the GPU path has not been benchmarked yet.
+**Performance**: runs on a 16-thread CPU with no GPU. On the 22 s c01 clip, `quality` with every service live takes
+about 22 min (the voice stage is network-bound), about 10.5 min offline; `--preset fast` offline about 8 min.
+`--preset fast` uses a smaller detector (YOLO11m, detection at 10 Hz); everything else as `quality`. `--threads`
+caps every stage. Stage times and what `fast` costs on the benchmark: [docs/performance.md](docs/performance.md).
+The GPU is used automatically when present, but has not been benchmarked yet.
 
 <details>
 <summary><b>Known limitations</b></summary>
