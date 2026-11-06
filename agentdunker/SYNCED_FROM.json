@@ -1,0 +1,275 @@
+{
+ "tool": "tools/sync_modules.py",
+ "modules": {
+  "tracking": {
+   "module": "m1",
+   "branch_worktree": "adk-cmd-m1",
+   "source_package": "adk_tracking",
+   "commit": "4f7005faaf266bbd860978785ebad6654cff6206",
+   "files": 19,
+   "tree_sha256": "251667572fbeae2c",
+   "rules": [
+    {
+     "file": "__main__.py",
+     "why": "in-process runner: main() takes argv"
+    },
+    {
+     "file": "__main__.py",
+     "why": "in-process runner: main() takes argv"
+    },
+    {
+     "file": "models.py",
+     "why": "no machine-specific weight path"
+    },
+    {
+     "file": "models.py",
+     "why": "weights live in the agentdunker model dir"
+    },
+    {
+     "file": "models.py",
+     "why": "ReID on GPU when available"
+    },
+    {
+     "file": "models.py",
+     "why": "ReID on GPU when available"
+    },
+    {
+     "file": "models.py",
+     "why": "CLIP on GPU when available"
+    },
+    {
+     "file": "models.py",
+     "why": "CLIP on GPU when available"
+    },
+    {
+     "file": "models.py",
+     "why": "CLIP on GPU when available"
+    },
+    {
+     "file": "models.py",
+     "why": "CLIP on GPU when available"
+    },
+    {
+     "file": "models.py",
+     "why": "device helper import"
+    },
+    {
+     "file": "vlm.py",
+     "why": "LLM/VLM credential from the configured provider"
+    },
+    {
+     "file": "vlm.py",
+     "why": "LLM/VLM call through the configured provider"
+    },
+    {
+     "file": "vlm.py",
+     "why": "provider layer import"
+    }
+   ]
+  },
+  "court": {
+   "module": "m2",
+   "branch_worktree": "adk-cmd-m2",
+   "source_package": "adk_court",
+   "commit": "85772b75865eb72c9671801c6e8516d30741ddd7",
+   "files": 16,
+   "tree_sha256": "0b93108d5efbfa88",
+   "rules": [
+    {
+     "file": "__main__.py",
+     "why": "in-process runner: main() takes argv"
+    },
+    {
+     "file": "__main__.py",
+     "why": "in-process runner: main() takes argv"
+    },
+    {
+     "file": "keypoints.py",
+     "why": "weights live in the agentdunker model dir"
+    }
+   ]
+  },
+  "identity": {
+   "module": "m3",
+   "branch_worktree": "adk-cmd-m3",
+   "source_package": "adk_identity",
+   "commit": "447097e9c5dd975a5627930b6490d13ad1721b61",
+   "files": 12,
+   "tree_sha256": "c5210761ff24de01",
+   "rules": [
+    {
+     "file": "__main__.py",
+     "why": "in-process runner: main() takes argv"
+    },
+    {
+     "file": "__main__.py",
+     "why": "in-process runner: main() takes argv"
+    },
+    {
+     "file": "games.py",
+     "why": "official data dir is configurable"
+    },
+    {
+     "file": "vlm.py",
+     "why": "LLM/VLM credential from the configured provider"
+    },
+    {
+     "file": "vlm.py",
+     "why": "LLM/VLM call through the configured provider"
+    },
+    {
+     "file": "vlm.py",
+     "why": "provider layer import"
+    },
+    {
+     "file": "vlm.py",
+     "why": "MOSS-VL credential from the configured provider"
+    }
+   ]
+  },
+  "replay": {
+   "module": "m4",
+   "branch_worktree": "adk-cmd-m4",
+   "source_package": "adk_replay",
+   "commit": "7c5dbe548e5a8f53ddea49060b97c0d5549d8b92",
+   "files": 42,
+   "tree_sha256": "3eac191af2eb23cd",
+   "rules": [
+    {
+     "file": "__main__.py",
+     "why": "in-process runner: main() takes argv"
+    },
+    {
+     "file": "__main__.py",
+     "why": "in-process runner: main() takes argv"
+    },
+    {
+     "file": "browser.py",
+     "why": "Xbot.glb is a downloaded asset"
+    },
+    {
+     "file": "browser.py",
+     "why": "use the Playwright-managed Chromium"
+    }
+   ]
+  },
+  "events": {
+   "module": "m5",
+   "branch_worktree": "adk-cmd-m5",
+   "source_package": "adk_events",
+   "commit": "e98e14529a122ad44176493cd8cf7f758afa26aa",
+   "files": 22,
+   "tree_sha256": "8965ca14487b8b07",
+   "rules": [
+    {
+     "file": "official.py",
+     "why": "official data dir is configurable"
+    },
+    {
+     "file": "detector.py",
+     "why": "weights live in the agentdunker model dir"
+    },
+    {
+     "file": "pose.py",
+     "why": "weights live in the agentdunker model dir"
+    },
+    {
+     "file": "detector.py",
+     "why": "ONNX detector on GPU when available"
+    },
+    {
+     "file": "vlm.py",
+     "why": "LLM/VLM credential from the configured provider"
+    },
+    {
+     "file": "vlm.py",
+     "why": "LLM/VLM call through the configured provider"
+    },
+    {
+     "file": "vlm.py",
+     "why": "provider layer import"
+    }
+   ]
+  },
+  "narration": {
+   "module": "m6",
+   "branch_worktree": "adk-cmd-m6",
+   "source_package": "adk_narration",
+   "commit": "dc2fdba0e44c5077189ffc9b04d8f8225b146716",
+   "files": 18,
+   "tree_sha256": "fab730fc076bfd9e",
+   "rules": [
+    {
+     "file": "__main__.py",
+     "why": "in-process runner: main() takes argv"
+    },
+    {
+     "file": "__main__.py",
+     "why": "in-process runner: main() takes argv"
+    },
+    {
+     "file": "moss.py",
+     "why": "TTS/ASR → MOSS provider, script chat → configured LLM provider"
+    },
+    {
+     "file": "moss.py",
+     "why": "provider layer import"
+    }
+   ]
+  },
+  "film": {
+   "module": "m7",
+   "branch_worktree": "adk-cmd-m7",
+   "source_package": "agentdunker",
+   "commit": "4e1735f3a120fdb1a942478b6761233e1aa39abe",
+   "files": 29,
+   "tree_sha256": "24ad946f4167cab2",
+   "rules": [
+    {
+     "file": "season.py",
+     "why": "season tables live in the official data dir"
+    },
+    {
+     "file": "render/style.py",
+     "why": "fonts are downloaded assets"
+    },
+    {
+     "file": "render/promo.py",
+     "why": "fonts are downloaded assets"
+    },
+    {
+     "file": "render/promo.py",
+     "why": "one Chromium lookup for the whole package"
+    },
+    {
+     "file": "models.py",
+     "why": "credentials from the configured provider"
+    },
+    {
+     "file": "models.py",
+     "why": "director LLM call through the configured provider"
+    },
+    {
+     "file": "modules.py",
+     "why": "keep M7's runner as the isolate mode"
+    },
+    {
+     "file": "modules.py",
+     "why": "module dirs come from agentdunker.runner"
+    },
+    {
+     "file": "modules.py",
+     "why": "the interpreter comes from agentdunker.runner"
+    },
+    {
+     "file": "modules.py",
+     "why": "renamed helper"
+    },
+    {
+     "file": "modules.py",
+     "why": "in-process module calls, subprocess isolation optional"
+    }
+   ]
+  }
+ }
+}

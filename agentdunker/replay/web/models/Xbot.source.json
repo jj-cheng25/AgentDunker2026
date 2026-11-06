@@ -1,0 +1,18 @@
+{
+  "asset": "Xbot.glb",
+  "source": "User-provided Holo Court repository, branch holo-court-v2",
+  "commit": "c0ce80a9ef0f2b22261ec9aa9e9c07eaac039aec",
+  "upstreamPath": "models/Xbot.glb",
+  "upstreamAttribution": "Three.js examples / Mixamo Xbot (as identified in the upstream README)",
+  "sha256": "002f8d269de68e5dce3d25195caf390d1aa359bbfaae3fcf4c8dc78ec36c3ba5",
+  "bytes": 2930032,
+  "assetModified": false,
+  "dependencies": {
+    "vendor/three/addons/loaders/GLTFLoader.js": "45139faddd5aaf48ed2d62203d976e5cbd703db1a592de40527f9f6cf58abd44",
+    "vendor/three/addons/utils/BufferGeometryUtils.js": "c25b7930e570e9ec56173cd3b866ec8d2e10016630db3937efb439daf1cedbf6",
+    "vendor/three/addons/utils/SkeletonUtils.js": "ee412be1aa05f3051c2bda8ea89612c1ba70c5c87de62b56040282120d5eb991"
+  },
+  "dependencyLicense": "../vendor/three/LICENSE",
+  "adapter": "../js/avatar.js",
+  "motionPolicy": "Existing source-bound CourtVision final rig only; no upstream motion binary used"
+}

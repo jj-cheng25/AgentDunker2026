@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Holo Court</title>
+  <style>
+    :root { --cyan: #35e6ff; --orange: #ff9a2e; --fg: #dff6ff; --panel: rgba(8, 18, 24, 0.72); }
+    html, body { margin: 0; height: 100%; background: #020406; color: var(--fg); overflow: hidden;
+      font-family: "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", system-ui, sans-serif; }
+    #stage { position: fixed; inset: 0; }
+    #hud { position: fixed; top: 18px; left: 20px; pointer-events: none; }
+    #title { font-size: 22px; font-weight: 700; letter-spacing: 2px; text-shadow: 0 0 12px var(--cyan); }
+    .legend { margin-top: 8px; font-size: 13px; opacity: 0.85; display: flex; gap: 14px; }
+    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; box-shadow: 0 0 8px currentColor; }
+    #caption { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); max-width: min(960px, 92vw);
+      padding: 10px 22px; background: rgba(20, 24, 28, 0.62); border-radius: 4px; font-size: 22px; font-weight: 600;
+      text-align: center; opacity: 0; transition: opacity 0.3s; pointer-events: none; text-shadow: 0 1px 4px #000; }
+    #caption.show { opacity: 1; }
+    #caption.hold { box-shadow: 0 0 0 2px rgba(255, 211, 77, 0.7); }
+    #caption.hold::before { content: '⏸ 讲解 '; color: #ffd34d; font-size: 16px; }
+    #bar { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); width: min(1180px, calc(100vw - 32px));
+      box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 14px;
+      background: var(--panel); border: 1px solid rgba(53, 230, 255, 0.25); border-radius: 8px; font-size: 13px; }
+    #seek { flex: 1 1 160px; accent-color: var(--cyan); }
+    #time { font-variant-numeric: tabular-nums; min-width: 84px; opacity: 0.8; }
+    button, select { background: rgba(53, 230, 255, 0.08); color: var(--fg); border: 1px solid rgba(53, 230, 255, 0.35);
+      border-radius: 5px; padding: 4px 10px; font: inherit; cursor: pointer; }
+    button.on { background: rgba(53, 230, 255, 0.3); }
+    #rec.on { background: rgba(255, 60, 60, 0.45); border-color: #f55; }
+    #play { width: 42px; }
+    label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+    .hint { position: fixed; right: 18px; top: 18px; font-size: 12px; opacity: 0.5; text-align: right; line-height: 1.6; }
+    #side { position: fixed; top: 16px; right: 16px; width: 300px; padding: 10px 12px 12px; box-sizing: border-box;
+      background: var(--panel); border: 1px solid rgba(53, 230, 255, 0.25); border-radius: 8px; font-size: 13px; line-height: 1.55; }
+    #side canvas { display: block; width: 100%; height: auto; }
+    #side .k { font-size: 11px; letter-spacing: 1px; opacity: 0.6; margin-bottom: 4px; }
+    #side [data-k=phase] { font-size: 16px; font-weight: 700; color: #ffd34d; margin-top: 8px; }
+    #side [data-k=intent] { opacity: 0.9; margin: 2px 0 8px; }
+    #side [data-k=stats] b { font-weight: 600; opacity: 0.65; margin-right: 4px; }
+    #side .chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0; }
+    #side .chip { display: inline-flex; flex-direction: column; padding: 4px 7px; border-radius: 4px;
+      background: rgba(53, 230, 255, 0.06); border: 1px solid rgba(53, 230, 255, 0.16); line-height: 1.3; }
+    #side .chip i { font-style: normal; font-size: 10px; opacity: 0.65; }
+    #side [data-k=stats] .chip b { opacity: 1; margin: 0; font-size: 14px; font-variant-numeric: tabular-nums; }
+    #pip { position: fixed; right: 16px; bottom: 84px; width: 300px; border: 1px solid rgba(53, 230, 255, 0.3); border-radius: 6px;
+      overflow: hidden; background: #000; }
+    #pip video { display: block; width: 100%; }
+    #pip span { position: absolute; left: 6px; top: 4px; font-size: 11px; padding: 1px 6px; background: rgba(0,0,0,0.6); border-radius: 3px; }
+    #start { position: fixed; left: 50%; top: 18px; transform: translateX(-50%); font-size: 18px; padding: 10px 24px;
+      background: rgba(53, 230, 255, 0.18); border: 1px solid var(--cyan); box-shadow: 0 0 24px rgba(53, 230, 255, 0.4); }
+    #voice.on { background: rgba(93, 255, 138, 0.25); border-color: #5dff8a; }
+    [hidden] { display: none !important; }
+    @media (max-width: 900px) { #side { width: 220px; font-size: 12px; } #pip { display: none; } }
+    @media (max-width: 640px) { #caption { font-size: 16px; bottom: 150px; } .hint { display: none; } }
+  body.export #bar, body.export .hint, body.export #start, body.export #pip { display:none !important; }
+body.export #caption {bottom:36px;}
+body.export #side { transform: scale(var(--export-panel-scale, 1.25)); transform-origin: top right; }
+body.export.pip #pip {display:block !important;bottom:115px;transform:scale(var(--export-panel-scale, 1.25));transform-origin:bottom right;}
+</style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div id="hud">
+    <div id="title"></div>
+    <div class="legend">
+      <span><i class="dot" style="color:var(--cyan);background:var(--cyan)"></i><span data-palette-label="off">青色阵营</span></span>
+      <span><i class="dot" style="color:var(--orange);background:var(--orange)"></i><span data-palette-label="def">橙色阵营</span></span>
+    </div>
+
+  </div>
+  <div id="side" hidden>
+    <div class="k">俯视战术板 · 站位示意</div>
+    <canvas width="560" height="590"></canvas>
+    <div data-k="phase"></div>
+    <div data-k="intent"></div>
+    <div data-k="stats"></div>
+  </div>
+  <div id="pip" hidden><video muted playsinline preload="auto"></video><span>原视频</span></div>
+  <button id="start" hidden>🔊 带语音解说播放</button>
+  <div class="hint">拖动旋转 · 滚轮缩放 · 右键平移<br>空格 播放/暂停 · ←/→ 快退/快进 · 1-5 切机位</div>
+  <div id="caption"></div>
+  <div id="bar">
+    <button id="play">❚❚</button>
+    <input id="seek" type="range" min="0" step="0.01" value="0">
+    <span id="time"></span>
+    <select id="speed">
+      <option value="0.25">0.25×</option><option value="0.5">0.5×</option>
+      <option value="1" selected>1×</option><option value="2">2×</option>
+    </select>
+    <button id="voice" hidden title="语音解说：每句说完才继续">🔊 解说</button>
+    <button data-cam="sideline">侧面</button>
+    <button data-cam="broadcast">转播</button>
+    <button data-cam="top">俯视</button>
+    <button data-cam="baseline">底线</button>
+    <button data-cam="follow">跟球</button>
+    <label><input id="notes" type="checkbox" checked>战术标注</label>
+    <label><input id="badges" type="checkbox" checked>号码</label>
+    <label><input id="orbit" type="checkbox">环绕</label>
+    <label id="pipToggle" hidden><input id="pipOn" type="checkbox" checked>原视频</label>
+    <label id="sideToggle" hidden><input id="sideOn" type="checkbox" checked>站位分析</label>
+    <button id="rec" title="从头录一整轮，导出 webm">● 录制</button>
+  </div>
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }
+  </script>
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
