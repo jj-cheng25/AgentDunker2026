@@ -3,6 +3,7 @@
 <p><img src="docs/media/hero.svg" width="100%" alt="AgentDunker：AI 篮球解说与可视化 Agent"></p>
 
 <p>
+<a href="https://mp.weixin.qq.com/s/hhVN8YK1eZvnQ_MH6_-vlg"><img alt="silver award, AWS × NBA hackathon 2026" src="https://img.shields.io/badge/silver_award-AWS_%C3%97_NBA_hackathon_2026-c9d3dc?style=flat-square&labelColor=0b2233"></a>
 <a href="LICENSE"><img alt="license AGPL-3.0" src="https://img.shields.io/badge/license-AGPL--3.0-ff8a3d?style=flat-square&labelColor=0b2233"></a>
 <img alt="python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3fe0ff?style=flat-square&labelColor=0b2233&logo=python&logoColor=white">
 <img alt="runs on CPU" src="https://img.shields.io/badge/runs_on-CPU-3fe0ff?style=flat-square&labelColor=0b2233">
@@ -13,7 +14,7 @@
 
 **给一段 NBA 转播进攻片段，全自动生成带激情中文解说的「十人全息 3D 战术复盘」短片。**
 
-[English](README_en.md) · [快速开始](#快速开始) · [工作原理](#工作原理) · [基准成绩](#基准成绩) · [性能](docs/performance.md) · [架构文档](docs/architecture.md) · [数据合同](docs/contracts.md) · [配置](docs/configuration.md)
+[English](README_en.md) · [获奖与报道](#获奖与报道) · [快速开始](#快速开始) · [工作原理](#工作原理) · [基准成绩](#基准成绩) · [性能](docs/performance.md) · [架构文档](docs/architecture.md) · [数据合同](docs/contracts.md) · [配置](docs/configuration.md)
 
 </div>
 
@@ -22,6 +23,14 @@ https://github.com/user-attachments/assets/daae0661-46ec-4bcc-ac1b-9dedd5bc3615
 
 <p align="center">▶ <b><a href="https://github.com/jj-cheng25/AgentDunker2026/releases/tag/demo-durant">观看完整 1080p 成片（GitHub Release：demo-durant）</a></b></p>
 <!-- DEMO-END -->
+
+## 获奖与报道
+
+<a href="https://mp.weixin.qq.com/s/hhVN8YK1eZvnQ_MH6_-vlg"><img src="docs/media/award.svg" width="100%" alt="银奖：亚马逊云科技 × NBA Broadcast Code 12H 极限黑客松（点击阅读亚马逊云科技官方报道）"></a>
+
+- **银奖**：亚马逊云科技与 NBA 联合举办的 Broadcast Code 12H 极限黑客松（2026 年 10 月 10–11 日，珠海 / 中国澳门）。120 位开发者组成 42 支战队，8 强在中国澳门 NBA House 决赛；“爱看球的agent”战队凭 AgentDunker 获银奖（金奖 1 支、银奖 3 支、铜奖 4 支），由 NBA 执行副总裁兼首席信息官 Krishna Bhagavathula 等颁奖。
+- **亚马逊云科技官方公众号报道**：[《当120+名极客用AI给NBA“做解说”，中国澳门的决赛现场燃炸了！》](https://mp.weixin.qq.com/s/hhVN8YK1eZvnQ_MH6_-vlg)（2026-10-12），以“比真球迷还有情绪的‘AI名嘴’”为题介绍了本队作品。
+- 战队来自上海创智学院、复旦大学与 MOSI 模思智能的 MOSS-VL 音视频理解团队。AgentDunker 最初是这次黑客松的参赛作品；本仓库是赛后重写的全自动、可安装版本。
 
 ## 亮点
 
