@@ -1,6 +1,6 @@
 # Performance
 
-Measured 2026-11-06 on a shared 64-core CPU node with **16 threads** for AgentDunker (other jobs kept the load at
+Measured 2026-11-06 and 2026-11-10 on a shared 64-core CPU node with **16 threads** for AgentDunker (other jobs kept the load at
 12–20), no GPU. Times are wall-clock for `agentdunker run` from an empty output directory. Model-answer caches
 were warm only where noted.
 
@@ -9,13 +9,19 @@ were warm only where noted.
 | run | clip | preset | services | wall time | film |
 |---|---|---|---|---|---|
 | clean venv, fresh | c01 (22.0 s, 59.94 fps) | quality | all live (Mosshub LLM, MOSS voice) | **1340 s (22.3 min)** | 72.6 s, 15/16 elements A |
-| same machine, offline | c01 | quality | none (`--offline`) | 629 s (10.5 min) | 71.3 s |
+| **fresh HOME, first film** (2026-11-10, current pins) | c01 | quality | none (`--offline`) | **663 s (11.1 min)**, intro/outro rendered in the background | 74.7 s ³ |
+| same HOME, second film | c01 | quality | none | 659 s (11.0 min) | 74.7 s |
+| same machine, offline (2026-11-06, M7 4e1735f) | c01 | quality | none | 629 s (10.5 min) | 71.3 s ³ |
 | offline | c01 | fast | none | **501 s (8.3 min)** | 71.3 s |
 | offline | c06 (14.8 s) | quality / fast | none | 445 s ¹ / 300 s | 56.7 s / 57.2 s |
 | offline | c12 (10.4 s) | quality / fast | none | 366 s / 294 s | 46.4 s / 35.5 s ² |
 
 ¹ measured 824 s, of which 379 s was a one-time rebuild of the intro/outro cache (the promo pages had just changed);
 see "first run" below. ² fast on c12 shortened the 3D window (tier B), hence the shorter film.
+³ 74.7 s vs 71.3 s is intended: M7 88e4ea0 slowed the 3D replay to 0.56× (0.5× for the last phase, closer to the
+reference film), so the c01 replay segment grew from 22.8 s to 26.2 s. Offline films also use the 3.2 s freeze
+(no official xFG card) instead of 5.2 s. Segments now: intro 6, live 21.95, transition 4.8, replay 26.19,
+freeze 3.2, resume 6.55, outro 6. The fast-preset rows were measured at the 11-06 pins.
 
 Stage times (seconds) — the analysis stages run tracking ∥ court, then identity, then events:
 
@@ -33,8 +39,15 @@ Stage times (seconds) — the analysis stages run tracking ∥ court, then ident
 340–590 s on c01) is the longest single stage, then tracking. With `fast` the tracking stage drops below court
 calibration, which becomes the critical path of the analysis (≈ 0.17 s per frame on CPU).
 
-**First run on a machine**: the intro, outro and cover are rendered once from their HTML sources (≈ 380 s) and
-cached in `paths.cache_dir`; later films reuse them until the promo sources change.
+**First run on a machine**: the intro, outro and cover are rendered once from their HTML sources (≈ 390 s on 16
+threads) and cached in `paths.cache_dir`. `agentdunker download-models` now does this at the end; if it has not
+been done, the first film renders it in the background while tracking and court calibration run (its own progress
+line, "intro/outro render — first run only"). Measured 2026-11-10 in a fresh HOME: first film 663 s vs 659 s for
+the second, i.e. the overlap costs ≈ 4 s. Before this change the render ran silently after the 3D replay and added
+≈ 386 s (commander's clean install, 2026-11-09: 1051 s for the same film).
+
+**Chromium launch check**: `doctor` and `run` start Chromium once (headless, about:blank) to catch missing system
+libraries: 0.31–0.36 s per check; a whole `agentdunker doctor` takes ≈ 4.5 s.
 
 ## What `fast` costs (M0 benchmark, `bench/score.py`, c01 + c06 + c12, offline)
 

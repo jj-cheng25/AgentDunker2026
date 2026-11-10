@@ -37,6 +37,16 @@ script is written (LLM if available, else templates that only state measured fac
 | MOSS-VL | shot-type veto and xFG-card read-back skipped |
 | official data (`paths.nba_data`) | no game match → no names, no official xFG card, no season stat on the hero plate |
 
+## Network
+
+- Ultralytics' online check, telemetry and Sentry are off in every mode (`YOLO_OFFLINE=true`; its settings file
+  lives in `<cache_dir>/ultralytics`, not `~/.config`). Chromium runs without background networking or component
+  updates.
+- `--offline` (or `run.offline = true`, `ADK_OFFLINE=1`) makes no network request at all: no model services, no
+  downloads (missing weights fail their stage with "run agentdunker download-models"), no live api.nba.cn name
+  lookup, Hugging Face offline mode. Verified with a socket audit hook: only loopback connections (the 3D renderer's
+  local page server).
+
 ## Paths, threads, presets, device
 
 | key | env | default |

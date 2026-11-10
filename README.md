@@ -51,12 +51,34 @@ git clone https://github.com/jj-cheng25/AgentDunker2026 && cd AgentDunker2026
 python3 -m venv .venv && source .venv/bin/activate
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu   # 只用 CPU 时；有 GPU 跳过这一行
 pip install -e .                      # 一套环境；可选 .[ui] .[gpu] .[dev]
-agentdunker download-models           # 约 2.2 GB 权重（sha256 校验）+ Chromium
+agentdunker download-models           # 权重 + CLIP + Chromium 约 2.8 GB（sha256 校验，断点续传）；并预渲染片头片尾
 agentdunker doctor                    # 逐项检查
 agentdunker run clip.mp4 -o out/      # → out/film.mp4 + out/report.json
 ```
 
-需要系统里有 `ffmpeg`（≥ 6，含 libx264）。国内网络可 `export HF_ENDPOINT=https://hf-mirror.com` 后再下载权重。
+**系统要求**：`ffmpeg`（≥ 6，含 libx264）和 Chromium 的系统库。全新的 Ubuntu/Debian 服务器上先装系统库：
+`sudo .venv/bin/playwright install-deps chromium`（`agentdunker doctor` 会实际启动一次 Chromium，缺库时给出这条命令）。
+磁盘约 5.5 GB：虚拟环境 2.4–3.1 GB，权重和 Chromium 2.8 GB。
+
+<details>
+<summary><b>国内网络</b></summary>
+
+<br>
+
+```bash
+# PyTorch CPU 版：阿里云镜像（与 download.pytorch.org 官方文件 sha256 一致，2026-11-10 核对）
+pip install --timeout 60 -i https://mirrors.aliyun.com/pypi/simple/ \
+    -f https://mirrors.aliyun.com/pytorch-wheels/cpu/ torch==2.15.0+cpu torchvision==0.29.2+cpu
+pip install --timeout 60 -i https://mirrors.aliyun.com/pypi/simple/ -e .
+# Hugging Face 上的权重（CLIP、OSNet、球场关键点、篮球检测）走镜像，校验和不变
+export HF_ENDPOINT=https://hf-mirror.com
+agentdunker download-models
+```
+
+YOLO11 权重（GitHub Releases）、字体（GitHub）和 Chromium（Playwright CDN）需要能访问境外网络，必要时先
+`export https_proxy=http://<代理地址>:<端口>`。下载中断时再运行一次 `agentdunker download-models`：已完成的文件保留，未完成的断点续传。
+
+</details>
 
 <table>
 <tr><th align="left">命令</th><th align="left">作用</th></tr>
@@ -112,7 +134,7 @@ export MOSS_API_KEY=...      # 解说配音 + 回读校验、MOSS-VL 小判断
 
 数字取自各模块的验收记录；评分脚本和基准片段不在本仓库（含 NBA 录像）。
 
-**性能**：16 线程 CPU、无 GPU 即可运行。22 秒的 c01 片段：quality 预设、模型服务全部在线约 22 分钟（配音阶段受网络限制），离线约 10.5 分钟；`--preset fast` 离线约 8 分钟。`--preset fast` 用较小的检测器（YOLO11m、10 Hz 检测），其余与 quality 相同；`--threads` 控制每个阶段的线程数。各阶段耗时和 fast 在基准上的代价见 [docs/performance.md](docs/performance.md)。GPU 路径会自动启用，但尚未实测。
+**性能**：16 线程 CPU、无 GPU 即可运行。22 秒的 c01 片段：quality 预设、模型服务全部在线约 22 分钟（配音阶段受网络限制），离线约 11 分钟（首次运行在分析的同时后台渲染片头片尾，不额外加时）；`--preset fast` 离线约 8 分钟。`--preset fast` 用较小的检测器（YOLO11m、10 Hz 检测），其余与 quality 相同；`--threads` 控制每个阶段的线程数。各阶段耗时和 fast 在基准上的代价见 [docs/performance.md](docs/performance.md)。GPU 路径会自动启用，但尚未实测。
 
 <details>
 <summary><b>已知局限</b></summary>
@@ -123,6 +145,7 @@ export MOSS_API_KEY=...      # 解说配音 + 回读校验、MOSS-VL 小判断
 - 号码读取依赖 VLM；看不清时只作候选，靠多帧投票和阵容约束。离线模式下不读号码。
 - 3D 复盘需要至少 3 秒、球场标定成功的全景镜头；以特写为主的片段会跳过 3D。
 - 只有进攻回合的解说，解说为中文；配音音色目前只有 MOSS 的 Mossland 音色，没有 key 时为字幕。
+- 3D 复盘、片头片尾和转场都用无头 Chromium 渲染：缺系统库时这几段会被跳过（`doctor` 和 `run` 开头都会提示修复命令）；Chromium 的套接字放在临时目录里，`$TMPDIR` 路径过长时会自动改用 `/tmp`。
 - 跟踪在同队球员遮挡交叉时仍会换号（IDF1 0.85），3D 里表现为个别球员短时位置预测（`observed=false`）。
 
 </details>

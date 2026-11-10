@@ -55,12 +55,36 @@ git clone https://github.com/jj-cheng25/AgentDunker2026 && cd AgentDunker2026
 python3 -m venv .venv && source .venv/bin/activate
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu   # CPU only; skip on a GPU machine
 pip install -e .                      # one environment; extras: .[ui] .[gpu] .[dev]
-agentdunker download-models           # ≈ 2.2 GB of weights (sha256-checked) + Chromium
+agentdunker download-models           # weights + CLIP + Chromium ≈ 2.8 GB (sha256, resumable); pre-renders intro/outro
 agentdunker doctor                    # checks every requirement
 agentdunker run clip.mp4 -o out/      # → out/film.mp4 + out/report.json
 ```
 
-Needs `ffmpeg` ≥ 6 with libx264 on the PATH.
+**System requirements**: `ffmpeg` ≥ 6 with libx264, and Chromium's system libraries. On a fresh Ubuntu/Debian
+server install them first: `sudo .venv/bin/playwright install-deps chromium` (`agentdunker doctor` starts Chromium
+once and prints this command when libraries are missing). Disk: about 5.5 GB (virtual environment 2.4–3.1 GB,
+weights and Chromium 2.8 GB).
+
+<details>
+<summary><b>Network in mainland China</b></summary>
+
+<br>
+
+```bash
+# PyTorch CPU wheels from Aliyun (same sha256 as the official download.pytorch.org files, checked 2026-11-10)
+pip install --timeout 60 -i https://mirrors.aliyun.com/pypi/simple/ \
+    -f https://mirrors.aliyun.com/pytorch-wheels/cpu/ torch==2.15.0+cpu torchvision==0.29.2+cpu
+pip install --timeout 60 -i https://mirrors.aliyun.com/pypi/simple/ -e .
+# weights hosted on Hugging Face (CLIP, OSNet, court keypoints, ball detector) via the mirror; checksums unchanged
+export HF_ENDPOINT=https://hf-mirror.com
+agentdunker download-models
+```
+
+YOLO11 weights (GitHub Releases), fonts (GitHub) and Chromium (Playwright CDN) need access outside the mainland;
+set `export https_proxy=http://<proxy>:<port>` if needed. If a download is cut, run `agentdunker download-models`
+again: finished files are kept and partial ones resume.
+
+</details>
 
 <table>
 <tr><th align="left">command</th><th align="left"></th></tr>
@@ -124,7 +148,8 @@ Numbers come from each module's acceptance record. The benchmark clips are NBA f
 repository.
 
 **Performance**: runs on a 16-thread CPU with no GPU. On the 22 s c01 clip, `quality` with every service live takes
-about 22 min (the voice stage is network-bound), about 10.5 min offline; `--preset fast` offline about 8 min.
+about 22 min (the voice stage is network-bound), about 11 min offline (the first film renders the intro/outro in the
+background during the analysis, at no extra time); `--preset fast` offline about 8 min.
 `--preset fast` uses a smaller detector (YOLO11m, detection at 10 Hz); everything else as `quality`. `--threads`
 caps every stage. Stage times and what `fast` costs on the benchmark: [docs/performance.md](docs/performance.md).
 The GPU is used automatically when present, but has not been benchmarked yet.
@@ -140,6 +165,9 @@ The GPU is used automatically when present, but has not been benchmarked yet.
   reads no numbers.
 - The 3D replay needs ≥ 3 s of a calibrated wide shot; clips that are mostly close-ups skip it.
 - Offensive possessions only; Chinese commentary only; the only voice is MOSS's Mossland voice (subtitles without a key).
+- The 3D replay, intro, outro and transition are rendered with headless Chromium: without its system libraries
+  those parts are skipped (`doctor` and the start of `run` print the fix). Chromium keeps Unix sockets in the temp
+  dir, so a too-long `$TMPDIR` is replaced by `/tmp` automatically.
 - Same-team occlusions still cause ID switches (IDF1 0.85); in 3D they show as short predicted stretches (`observed=false`).
 
 </details>
