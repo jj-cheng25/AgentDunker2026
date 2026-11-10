@@ -121,7 +121,7 @@ class _Page:
         self.profile = tempfile.TemporaryDirectory(prefix="adk-replay-")
         self.logs = tempfile.TemporaryFile()
         self.browser = subprocess.Popen(
-            [_chromium(), "--headless", "--no-sandbox", "--disable-dev-shm-usage", "--enable-unsafe-swiftshader",
+            [_chromium(), "--headless", "--no-sandbox", *__import__("agentdunker.weights", fromlist=["x"]).CHROMIUM_QUIET_FLAGS, "--disable-dev-shm-usage", "--enable-unsafe-swiftshader",
              "--use-gl=angle", "--use-angle=swiftshader", "--force-device-scale-factor=1",
              "--remote-debugging-port=0", "--user-data-dir=" + self.profile.name,
              f"--window-size={width},{height}", "about:blank"],

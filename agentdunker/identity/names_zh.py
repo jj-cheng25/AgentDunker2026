@@ -31,6 +31,8 @@ def player_zh(game_id: str, person_id: int | str | None, timeout: float = 15.0) 
     cached = CACHE / f"{person_id}.json"
     if cached.exists():
         return json.loads(cached.read_text())
+    if __import__("agentdunker.providers", fromlist=["x"]).offline():   # live api.nba.cn lookup
+        return None
     try:
         r = requests.get(URL, params={"gameId": game_id, "playerId": person_id}, timeout=timeout)
         r.raise_for_status()

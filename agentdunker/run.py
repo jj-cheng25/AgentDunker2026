@@ -8,6 +8,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import shutil
+import tempfile
+import threading
 import time
 from pathlib import Path
 from typing import Callable, Optional
@@ -54,6 +58,64 @@ def _hook_timed(Run) -> None:
     Run.timed = timed
 
 
+PROMO_FILES = ("intro.mp4", "outro.mp4", "cover.png", "intro_score.wav", "outro_score.wav")
+_promo_lock = threading.Lock()
+
+
+def promo_ready() -> bool:
+    """Intro / outro / cover already rendered for the current promo sources and fonts?"""
+    from .film.render import promo
+    d = promo._cache_dir()
+    return all((d / f).exists() for f in PROMO_FILES)
+
+
+def hook_promo() -> None:
+    """One intro/outro render at a time, announced as its own stage (first run on a machine: ≈ 6 min, then cached)."""
+    from .film.render import promo
+    if getattr(promo.build_fixed, "_adk_hooked", False):
+        return
+    orig = promo.build_fixed
+
+    def build_fixed():
+        with _promo_lock:
+            if promo_ready():
+                return orig()
+            runner.emit("promo", "start", mode="first run only, cached afterwards (≈ 6 min on 16 CPU threads)")
+            t0 = time.monotonic()
+            try:
+                d = orig()
+            except Exception as e:
+                runner.emit("promo", "failed", seconds=time.monotonic() - t0, reason=str(e).splitlines()[0][:160])
+                raise
+            runner.emit("promo", "done", seconds=time.monotonic() - t0)
+            return d
+
+    build_fixed._adk_hooked = True
+    promo.build_fixed = build_fixed
+
+
+def prerender_promo(background: bool = False) -> Optional[threading.Thread]:
+    """Render intro/outro now (download-models) or in a background thread (first film, overlaps the analysis)."""
+    from .weights import chromium_check
+    hook_promo()
+    if promo_ready() or not chromium_check()[0]:
+        return None
+    from .film.render import promo
+
+    def work():
+        try:
+            promo.build_fixed()
+        except Exception as e:  # noqa: BLE001  (the film drops intro/outro and says why)
+            logger.warning("intro/outro render failed: %s", e)
+
+    if not background:
+        work()
+        return None
+    th = threading.Thread(target=work, name="promo-render", daemon=True)
+    th.start()
+    return th
+
+
 def make_film(clip: str, out_dir: str, *, reuse: Optional[str] = None, skip: tuple = (),
               progress: Optional[Callable] = None) -> dict:
     config.apply()
@@ -73,13 +135,32 @@ def make_film(clip: str, out_dir: str, *, reuse: Optional[str] = None, skip: tup
     root.addHandler(fh)
     if root.level == logging.NOTSET or root.level > logging.INFO:
         root.setLevel(logging.INFO)
+    # A private temp dir for the run (stages, Chromium's org.chromium.* dirs), removed afterwards.
+    tmp = Path(out_dir).resolve() / "work" / "tmp"
+    tmp.mkdir(parents=True, exist_ok=True)
+    old_tmp = os.environ.get("TMPDIR")
+    os.environ["TMPDIR"] = str(tmp)
+    tempfile.tempdir = None
     try:
+        prerender_promo(background=True)     # first run: intro/outro render overlaps the analysis
         rep = film_mod.make_film(clip, out_dir, reuse=reuse, use_llm=svc["llm"]["ok"],
                                  use_moss_vl=svc["moss_vl"]["ok"], skip=skip)
     finally:
         root.removeHandler(fh)
         fh.close()
+        if old_tmp is None:
+            os.environ.pop("TMPDIR", None)
+        else:
+            os.environ["TMPDIR"] = old_tmp
+        tempfile.tempdir = None
+        shutil.rmtree(tmp, ignore_errors=True)
     return _finish(rep, out_dir, svc, t0)
+
+
+def _chromium_state() -> dict:
+    from .weights import chromium_check
+    ok, detail = chromium_check()
+    return {"ok": ok, "detail": detail}
 
 
 def _finish(rep: dict, out_dir: str, svc: dict, t0: float) -> dict:
@@ -89,6 +170,7 @@ def _finish(rep: dict, out_dir: str, svc: dict, t0: float) -> dict:
         "version": __version__, "preset": config.get()["run"]["preset"], "runner": config.get()["run"]["runner"],
         "threads": config.threads(), "seconds": round(time.monotonic() - t0, 1), "config": config.public(),
         "services": svc,
+        "chromium": _chromium_state(),
         "services_missing": {k: SERVICE_EFFECTS[k] for k, v in svc.items() if not v["ok"]},
         "degraded": degraded,
     }

@@ -50,7 +50,7 @@ DEFAULTS: dict[str, Any] = {
     "voice": {"backend": "moss"},          # moss | none (subtitles only)
     "paths": {"model_dir": str(HOME_CACHE / "models"), "cache_dir": str(HOME_CACHE / "cache"),
               "nba_data": str(HOME_CACHE / "nba_data")},
-    "run": {"preset": "quality", "threads": 16, "runner": "inprocess", "device": "auto"},
+    "run": {"preset": "quality", "threads": 16, "runner": "inprocess", "device": "auto", "offline": False},
 }
 
 ENV = {   # environment variable → (section, key)
@@ -61,7 +61,7 @@ ENV = {   # environment variable → (section, key)
     "ADK_VOICE_ID": ("moss", "voice_id"),
     "ADK_MODEL_DIR": ("paths", "model_dir"), "ADK_CACHE": ("paths", "cache_dir"), "ADK_NBA_DATA": ("paths", "nba_data"),
     "ADK_PRESET": ("run", "preset"), "ADK_THREADS": ("run", "threads"), "ADK_RUNNER": ("run", "runner"),
-    "ADK_DEVICE": ("run", "device"),
+    "ADK_DEVICE": ("run", "device"), "ADK_OFFLINE": ("run", "offline"),
 }
 
 
@@ -164,6 +164,12 @@ def apply() -> None:
         "ADK_ID_CACHE": str(cache / "identity"), "ADK_ID_INDEX": str(cache / "identity" / "pbp_compact.json.gz"),
         "PLAYWRIGHT_BROWSERS_PATH": os.environ.get("PLAYWRIGHT_BROWSERS_PATH", str(path("model_dir") / "ms-playwright")),
     }
+    # Ultralytics: no online check, telemetry or Sentry in any mode (it contacted one.one.one.one and
+    # google-analytics during --offline runs); its settings file lives in our cache, not in ~/.config.
+    env["YOLO_OFFLINE"] = "true"
+    env["YOLO_CONFIG_DIR"] = os.environ.get("YOLO_CONFIG_DIR", str(cache / "ultralytics"))
+    if str(c["run"].get("offline")).lower() in ("1", "true", "yes"):
+        env.update(ADK_OFFLINE="1", HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1")
     if l.provider == "mosshub":
         env["MOSSHUB_BASE_URL"] = l.base_url
     clip = path("model_dir") / "clip-vit-large-patch14"

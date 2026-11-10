@@ -22,7 +22,7 @@ LABELS = {"tracks": "players & referees (tracking)", "court": "court calibration
           "narration": "commentary", "replay": "3D replay render", "render_intro": "intro", "render_live":
           "live play + nameplates", "render_bridge": "3D transition", "render_replay": "3D segment",
           "render_freeze": "shot freeze", "render_resume": "resume + light wave", "render_outro": "outro",
-          "audio": "audio mix", "compose": "final mux", "moss_vl_shots": "MOSS-VL shot check",
+          "audio": "audio mix", "promo": "intro/outro render", "compose": "final mux", "moss_vl_shots": "MOSS-VL shot check",
           "moss_vl_readback": "MOSS-VL card read-back"}
 
 
@@ -71,6 +71,7 @@ def _setup(a) -> None:
         over["voice"] = {"backend": "none"}
     if getattr(a, "offline", False):
         over["llm"], over["voice"], over["moss"] = {"provider": "none"}, {"backend": "none"}, {"vl_checks": False}
+        over.setdefault("run", {})["offline"] = True
     if over:
         config.override(**over)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -88,6 +89,11 @@ def cmd_run(a) -> int:
     problems = preflight()
     for p in problems:
         print(f"warning: {p}", file=sys.stderr)
+    from .doctor import chromium_problem
+    chrome = chromium_problem()
+    if chrome:                       # always a film: warn loudly, then carry on without the Chromium parts
+        bar = "!" * 78
+        print(f"{bar}\nWARNING: {chrome}\n{bar}", file=sys.stderr)
     from .providers import available
     c, svc = config.get(), available()
     nokey = " (no key)"
@@ -126,8 +132,22 @@ def cmd_download(a) -> int:
                 failed.append("chromium")
         elif weights.chromium_path():
             print(f"  ok        Chromium {weights.chromium_path()}")
+        ok, detail = weights.chromium_check()
+        if not ok:
+            print(f"  FAILED    Chromium cannot start: {detail}\n            fix: {weights.chromium_fix()}")
+            failed.append("chromium (system libraries)")
+        elif not failed and not a.no_prerender:
+            from .run import prerender_promo, promo_ready
+            if not promo_ready():
+                print("  render    intro/outro once (≈ 6 min on 16 CPU threads; later films reuse it)", flush=True)
+                t0 = time.monotonic()
+                prerender_promo()
+                print(f"  {'ok' if promo_ready() else 'FAILED':9s} intro/outro ({time.monotonic() - t0:.0f} s)")
+            else:
+                print("  ok        intro/outro (cached)")
     if failed:
-        print(f"failed: {', '.join(failed)}")
+        print(f"failed: {', '.join(failed)}\n"
+              "→ run `agentdunker download-models` again: finished files are kept, partial ones resume.")
         return 1
     print("all assets present and verified")
     return 0
@@ -175,6 +195,7 @@ def main(argv: list[str] | None = None) -> int:
     m.add_argument("--only", help="comma list of asset names")
     m.add_argument("--force", action="store_true")
     m.add_argument("--no-chromium", action="store_true")
+    m.add_argument("--no-prerender", action="store_true", help="do not render the intro/outro now (first film does it)")
     _common(m)
     m.set_defaults(fn=cmd_download)
 

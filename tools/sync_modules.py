@@ -136,6 +136,34 @@ RULES: list[Rule] = [
          '    except Exception:  # noqa: BLE001  (compose() embeds the cover only if it exists)\n'
          '        return Path("/nonexistent/cover.png")\n', "no Chromium must not fail the mux"),
 
+    # ------------------------------------------------------------------ one downloader; nothing over the network in --offline
+    Rule("m5", "detector.py", "urllib.request.urlretrieve(WEIGHTS_URL, tmp)",
+         '__import__("agentdunker.weights", fromlist=["x"]).fetch_for_module("deim_m_640.onnx", tmp)',
+         "downloads: retries/mirrors, none in --offline"),
+    Rule("m2", "keypoints.py", "urllib.request.urlretrieve(MODEL_URL, path)",
+         '__import__("agentdunker.weights", fromlist=["x"]).fetch_for_module("court-33-yolo11m-pose.onnx", path)',
+         "downloads: retries/mirrors, none in --offline"),
+    Rule("m1", "models.py", "        attempt_download_asset(str(path))\n",
+         '        __import__("agentdunker.weights", fromlist=["x"]).fetch_for_module(name, path)\n',
+         "downloads: retries/mirrors, none in --offline"),
+    Rule("m1", "models.py", "    from ultralytics.utils.downloads import attempt_download_asset\n", "",
+         "unused after the download rule"),
+    Rule("m5", "pose.py", 'YOLO(str(w) if Path(w).exists() else "yolo11x-pose.pt")',
+         'YOLO(str(w) if Path(w).exists() else str(__import__("agentdunker.weights", fromlist=["x"])'
+         '.fetch_for_module("yolo11x-pose.pt", w)))',
+         "no silent Ultralytics download into the working directory"),
+    Rule("m3", "names_zh.py", "    try:\n        r = requests.get(URL,",
+         '    if __import__("agentdunker.providers", fromlist=["x"]).offline():   # live api.nba.cn lookup\n'
+         "        return None\n    try:\n        r = requests.get(URL,", "no live name lookup in --offline"),
+    # Chromium: no background networking / component updates (a 7.9 MB .crx was fetched during a render)
+    Rule("m4", "browser.py", '[_chromium(), "--headless", "--no-sandbox",',
+         '[_chromium(), "--headless", "--no-sandbox", *__import__("agentdunker.weights", fromlist=["x"]).CHROMIUM_QUIET_FLAGS,',
+         "no Chromium background networking"),
+    Rule("m7", "render/promo.py", 'args=["--no-sandbox", "--allow-file-access-from-files"]',
+         'args=["--no-sandbox", "--allow-file-access-from-files",\n'
+         '                                          *__import__("agentdunker.weights", fromlist=["x"]).CHROMIUM_QUIET_FLAGS]',
+         "no Chromium background networking"),
+
     # ------------------------------------------------------------------ GPU when available (agentdunker.device)
     Rule("m1", "models.py", "        self.model.load_state_dict(state)\n",
          "        self.model.load_state_dict(state)\n        self.model.to(_device())\n", "ReID on GPU when available"),

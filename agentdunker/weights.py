@@ -13,7 +13,9 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
+import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -38,8 +40,9 @@ class Asset:
     size: int
     license: str
     used_by: str
-    kind: str = "model"            # model | font | web | hf
+    kind: str = "model"            # model | font | web | clip
     presets: tuple = ("fast", "quality")
+    mirrors: tuple = ()            # tried in order after ``url``; same bytes (sha256-checked)
 
     def path(self) -> Path:
         base = config.path("model_dir")
@@ -52,16 +55,20 @@ ASSETS: list[Asset] = [
           114636239, "AGPL-3.0 (Ultralytics)", "tracking: person detector (quality preset)", presets=("quality",)),
     Asset("yolo11m.pt", f"{UL}/yolo11m.pt", "d5ffc1a674953a08e11a8d21e022781b1b23a19b730afc309290bd9fb5305b95",
           40684120, "AGPL-3.0 (Ultralytics)", "tracking: person detector (fast preset)", presets=("fast",)),
-    Asset("osnet_x0_25_msmt17.pth", "https://drive.google.com/uc?export=download&id=1Kkx2zW89jq_NETu4u42CFZTMVD5Hwm6e",
+    # The author's Hugging Face copy is byte-identical to the torchreid model-zoo file on Google Drive and works
+    # through HF_ENDPOINT mirrors; Drive stays as the fallback.
+    Asset("osnet_x0_25_msmt17.pth", "hf://kaiyangzhou/osnet/resolve/a5c5cc037c24235cda3b21085b93ad77c9616224/"
+          "osnet_x0_25_msmt17_combineall_256x128_amsgrad_ep150_stp60_lr0.0015_b64_fb10_softmax_labelsmooth_flip_jitter.pth",
           "cf55163d78fc44c62c82f85ab62d39f10438679b5abe8c698ae08cfa84aa6e18", 9336983,
-          "MIT (torchreid model zoo, KaiyangZhou/deep-person-reid)", "tracking: OSNet ReID appearance features"),
+          "MIT (torchreid model zoo, KaiyangZhou/deep-person-reid)", "tracking: OSNet ReID appearance features",
+          mirrors=("https://drive.google.com/uc?export=download&id=1Kkx2zW89jq_NETu4u42CFZTMVD5Hwm6e",)),
     Asset("court-33-yolo11m-pose.onnx",
-          "https://huggingface.co/MTerryJack/Element-PitchCalib-Basketball-Court/resolve/"
+          "hf://MTerryJack/Element-PitchCalib-Basketball-Court/resolve/"
           "81111962e7bfeb669cfbedad2ff455342dbb5529/weights.onnx",
           "9c00051bd207f5b76c6e492f3672be8dd7cce5a217ab271e971378fca057d26d", 86282807,
           "AGPL-3.0 assumed (YOLO11m-pose derivative; no licence on the model card; trained on Roboflow "
           "Universe basketball-court-detection-2)", "court: 33 court keypoints"),
-    Asset("deim_m_640.onnx", "https://huggingface.co/ortizeg/basketball-deim-m-640/resolve/"
+    Asset("deim_m_640.onnx", "hf://ortizeg/basketball-deim-m-640/resolve/"
           "1b4f378bc1fa8d3a7980768d3b08486b6f3fe357/deim_m_640.onnx",
           "29f575c8127e5eadde6da60cd66c3d0a5873adc0cbfd4e2af9ee35fde339fac7", 77722583, "Apache-2.0",
           "events: ball / rim / player detector"),
@@ -140,60 +147,148 @@ def clip_dir() -> Path:
     return model_dir() / CLIP_DIR
 
 
+RETRIES = 5          # per source: resumed (HTTP Range) after a dropped connection
+UA = {"User-Agent": "agentdunker-download"}
+
+
+def _resolve(url: str) -> str:
+    if url.startswith("hf://"):     # Hugging Face file: honours HF_ENDPOINT (e.g. https://hf-mirror.com)
+        return os.environ.get("HF_ENDPOINT", "https://huggingface.co").rstrip("/") + "/" + url[5:]
+    return url
+
+
+def _stream(url: str, tmp: Path, size: int, sleep=time.sleep) -> None:
+    """One file into ``tmp``, resuming from what is already there; raises unless exactly ``size`` bytes arrived."""
+    for attempt in range(RETRIES + 1):
+        have = tmp.stat().st_size if tmp.exists() else 0
+        if size and have > size:
+            tmp.unlink()
+            have = 0
+        if size and have == size:
+            return
+        try:
+            hdr = dict(UA, **({"Range": f"bytes={have}-"} if have else {}))
+            with urllib.request.urlopen(urllib.request.Request(url, headers=hdr), timeout=60) as r:
+                mode = "ab" if have and r.status == 206 else "wb"        # 200: server ignored Range → start over
+                with open(tmp, mode) as f:
+                    shutil.copyfileobj(r, f, 1 << 20)
+            got = tmp.stat().st_size
+            if not size or got == size:
+                return
+            raise OSError(f"connection closed at {got} of {size} bytes")
+        except OSError as e:          # URLError, HTTPError, IncompleteRead, timeouts are all OSError subclasses
+            if isinstance(e, urllib.error.HTTPError) and e.code in (403, 404, 410):
+                raise
+            if attempt == RETRIES:
+                raise
+            logger.info("download %s: %s; resuming (%d/%d)", tmp.name, e, attempt + 1, RETRIES)
+            sleep(min(30, 3 * (attempt + 1)))
+    raise OSError("unreachable")
+
+
 def _fetch(url: str, dst: Path, size: int = 0) -> None:
-    if url.startswith("hf://"):
-        url = os.environ.get("HF_ENDPOINT", "https://huggingface.co").rstrip("/") + "/" + url[5:]
+    url = _resolve(url)
     tmp = dst.with_name(dst.name + ".part")
     if "drive.google.com" in url:
-        try:
-            import gdown  # handles the Drive confirmation page
-            gdown.download(url, str(tmp), quiet=True)
-        except ImportError:
-            urllib.request.urlretrieve(url, tmp)
+        import gdown  # handles the Drive confirmation page
+        for attempt in range(RETRIES + 1):
+            if gdown.download(url, str(tmp), quiet=True, resume=True) and (not size or tmp.stat().st_size == size):
+                break
+            if attempt == RETRIES:
+                raise OSError("Google Drive download failed")
+            time.sleep(3 * (attempt + 1))
     elif size >= 200_000_000:
         _fetch_ranges(url, tmp, size)
     else:
-        req = urllib.request.Request(url, headers={"User-Agent": "agentdunker-download"})
-        with urllib.request.urlopen(req, timeout=60) as r, open(tmp, "wb") as f:
-            shutil.copyfileobj(r, f, 1 << 20)
+        _stream(url, tmp, size)
     os.replace(tmp, dst)
 
 
 def _fetch_ranges(url: str, tmp: Path, size: int, parts: int = 8) -> None:
     """Large files: ``parts`` parallel HTTP range requests (mirrors often throttle each connection)."""
     from concurrent.futures import ThreadPoolExecutor
-    with open(tmp, "wb") as f:
-        f.truncate(size)
     step = -(-size // parts)
+    pieces = [tmp.with_name(f"{tmp.name}.{i}") for i in range(parts)]
 
     def get(i: int) -> None:
         a, b = i * step, min(size, (i + 1) * step) - 1
-        for attempt in range(5):
+        part = pieces[i]
+        for attempt in range(RETRIES + 1):
+            have = part.stat().st_size if part.exists() else 0
+            if have == b - a + 1:
+                return
             try:
-                req = urllib.request.Request(url, headers={"User-Agent": "agentdunker-download", "Range": f"bytes={a}-{b}"})
-                with urllib.request.urlopen(req, timeout=60) as r, open(tmp, "r+b") as f:
+                req = urllib.request.Request(url, headers=dict(UA, Range=f"bytes={a + have}-{b}"))
+                with urllib.request.urlopen(req, timeout=60) as r, open(part, "ab") as f:
                     if r.status != 206:
                         raise OSError(f"server ignored the range request (HTTP {r.status})")
-                    f.seek(a)
-                    pos = a
-                    while chunk := r.read(1 << 20):
-                        f.write(chunk)
-                        pos += len(chunk)
-                    if pos != b + 1:
-                        raise OSError("short read")
-                return
+                    shutil.copyfileobj(r, f, 1 << 20)
+                if part.stat().st_size == b - a + 1:
+                    return
+                raise OSError("short read")
             except OSError:
-                if attempt == 4:
+                if attempt == RETRIES:
                     raise
-                time.sleep(3 * (attempt + 1))
+                time.sleep(min(30, 3 * (attempt + 1)))
 
     with ThreadPoolExecutor(parts) as ex:
         list(ex.map(get, range(parts)))
+    with open(tmp, "wb") as out:
+        for part in pieces:
+            with open(part, "rb") as f:
+                shutil.copyfileobj(f, out, 1 << 20)
+            part.unlink()
+
+
+def _get(a: Asset, log) -> Optional[str]:
+    """Download one asset from its sources; None on success, else the last error."""
+    p = a.path()
+    err = None
+    sources = (a.url, *a.mirrors)
+    for i, url in enumerate(sources):
+        for check in (1, 2):                  # one fresh retry after a checksum mismatch
+            try:
+                _fetch(url, p, a.size)
+            except Exception as e:  # noqa: BLE001
+                err = f"{type(e).__name__}: {e}"
+                break
+            if sha256(p) == a.sha256:
+                return None
+            p.unlink()
+            err = "checksum mismatch"
+            if check == 1:
+                log(f"  retry     {a.name}: checksum mismatch, downloading again")
+        if i + 1 < len(sources):
+            log(f"  fallback  {a.name}: {err}; trying {_resolve(sources[i + 1]).split('/')[2]}")
+    return err
+
+
+def fetch_for_module(name: str, dst) -> Path:
+    """For the modules' own "download if missing" paths: same sources, retries and checks as download-models.
+
+    In offline mode nothing is downloaded: the stage fails with a clear message and the film degrades.
+    """
+    from .providers import offline
+    if offline():
+        raise RuntimeError(f"{name} is missing and --offline forbids downloads: run `agentdunker download-models`")
+    a = BY_NAME.get(name)
+    if a is None:
+        raise RuntimeError(f"{name} is not a known asset: run `agentdunker download-models`")
+    dst = Path(dst)
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    err = None
+    for url in (a.url, *a.mirrors):
+        try:
+            _fetch(url, dst, a.size)
+            return dst
+        except Exception as e:  # noqa: BLE001
+            err = e
+    raise RuntimeError(f"could not download {name}: {err}; run `agentdunker download-models`")
 
 
 def download(names: Optional[Iterable[str]] = None, preset: Optional[str] = None, force: bool = False,
              log=print) -> list[str]:
-    """Download (and verify) assets; returns the names that failed."""
+    """Download (and verify) assets; returns the names that failed. Finished files are kept between runs."""
     todo = [BY_NAME[n] for n in names] if names else [a for a in ASSETS if not preset or preset in a.presets]
     failed = []
     for a in todo:
@@ -202,17 +297,13 @@ def download(names: Optional[Iterable[str]] = None, preset: Optional[str] = None
         if not force and status(a, verify=True) == "ok":
             log(f"  ok        {a.name}")
             continue
-        host = os.environ.get("HF_ENDPOINT", "huggingface.co") if a.url.startswith("hf://") else a.url.split("/")[2]
-        log(f"  download  {a.name} ({a.size / 1e6:.1f} MB) ← {host.removeprefix('https://')}")
-        try:
-            _fetch(a.url, p, a.size)
-        except Exception as e:  # noqa: BLE001
-            log(f"  FAILED    {a.name}: {type(e).__name__}: {e}")
-            failed.append(a.name)
-            continue
-        if sha256(p) != a.sha256:
+        if force and p.exists():
             p.unlink()
-            log(f"  FAILED    {a.name}: checksum mismatch (deleted)")
+        host = _resolve(a.url).split("/")[2]
+        log(f"  download  {a.name} ({a.size / 1e6:.1f} MB) ← {host}")
+        err = _get(a, log)
+        if err:
+            log(f"  FAILED    {a.name}: {err}")
             failed.append(a.name)
     return failed
 
@@ -232,6 +323,44 @@ def chromium_path() -> Optional[str]:
         if shutil.which(name):
             return shutil.which(name)
     return None
+
+
+# Every Chromium we start: no background networking, no component updates (it downloaded a 7.9 MB .crx during a
+# render before), no first-run UI. Used by the replay renderer, the promo pages and the preflight check.
+CHROMIUM_QUIET_FLAGS = ["--disable-background-networking", "--disable-component-update", "--no-first-run",
+                        "--no-default-browser-check", "--disable-sync", "--disable-default-apps",
+                        "--disable-domain-reliability", "--disable-breakpad", "--metrics-recording-only"]
+_CHECK: dict = {}
+
+
+def chromium_check(timeout: float = 30) -> tuple[bool, str]:
+    """Start Chromium once (headless, about:blank). (True, path) or (False, first error line). Cached per process."""
+    exe = chromium_path()
+    if not exe:
+        return False, "not installed"
+    if exe in _CHECK:
+        return _CHECK[exe]
+    with tempfile.TemporaryDirectory(prefix="adk-chromium-check-") as d:
+        cmd = [exe, "--headless", "--no-sandbox", "--disable-gpu", *CHROMIUM_QUIET_FLAGS, f"--user-data-dir={d}",
+               "--dump-dom", "about:blank"]
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env={**os.environ, "TMPDIR": d})
+            lines = [l for l in (r.stderr or "").splitlines() if l.strip()]
+            bad = r.returncode != 0
+            msg = next((l for l in lines if "error" in l.lower()), lines[0] if lines else f"exit code {r.returncode}")
+            res = (False, f"exit code {r.returncode}: {msg.strip()[:200]}") if bad else (True, exe)
+        except subprocess.TimeoutExpired:
+            res = (False, f"did not finish within {timeout:.0f} s")
+        except OSError as e:
+            res = (False, f"{type(e).__name__}: {e}")
+    _CHECK[exe] = res
+    return res
+
+
+def chromium_fix() -> str:
+    """The command that installs Chromium's system libraries, with this environment's real path."""
+    pw = Path(sys.executable).parent / "playwright"
+    return f"sudo {pw if pw.exists() else sys.executable + ' -m playwright'} install-deps chromium"
 
 
 def install_chromium(log=print) -> bool:

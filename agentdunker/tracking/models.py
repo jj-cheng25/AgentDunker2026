@@ -41,12 +41,11 @@ def set_threads(n: int) -> None:
 
 def load_detector(name: str):
     from ultralytics import RTDETR, YOLO
-    from ultralytics.utils.downloads import attempt_download_asset
 
     path = MODEL_DIR / name
     if not path.exists():
         MODEL_DIR.mkdir(parents=True, exist_ok=True)
-        attempt_download_asset(str(path))
+        __import__("agentdunker.weights", fromlist=["x"]).fetch_for_module(name, path)
     return (RTDETR if "rtdetr" in name else YOLO)(str(path))
 
 

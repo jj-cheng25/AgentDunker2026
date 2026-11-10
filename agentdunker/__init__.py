@@ -6,7 +6,14 @@
 Subpackages: tracking (players, referees, teams), court (homography), identity (jerseys, names, game),
 events (ball, shot, xFG), replay (3D), narration (commentary + voice), film (director, render, assembly).
 """
+import os as _os
+
 __version__ = "0.1.0"
+
+# Before anything can import ultralytics (also in stage subprocesses): no online check / telemetry / Sentry.
+_os.environ["YOLO_OFFLINE"] = "true"
+_os.environ.setdefault("YOLO_CONFIG_DIR", _os.path.join(_os.environ.get("XDG_CACHE_HOME") or
+                                                        _os.path.expanduser("~/.cache"), "agentdunker", "ultralytics"))
 
 
 def make_film(clip: str, out_dir: str, **kw):

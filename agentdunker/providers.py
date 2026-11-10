@@ -38,9 +38,15 @@ def _read_key(env: str, key_file: str) -> Optional[str]:
     return None
 
 
+def offline() -> bool:
+    """``--offline``: no network request of any kind (model services, downloads, live name lookups)."""
+    v = config.get()["run"].get("offline")
+    return str(v).lower() in ("1", "true", "yes") or os.environ.get("ADK_OFFLINE") == "1"
+
+
 def llm_key() -> Optional[str]:
     l = config.llm()
-    if l.provider == "none":
+    if l.provider == "none" or offline():
         return None
     key = _read_key(l.key_env, l.key_file)
     if key is None and l.provider == "gemini":
@@ -53,6 +59,8 @@ def llm_key() -> Optional[str]:
 def moss_key(purpose: str = "speech") -> Optional[str]:
     """MOSS credential for ``speech`` (TTS/ASR) or ``vl`` (MOSS-VL); None when that use is switched off."""
     c = config.get()
+    if offline():
+        return None
     if purpose == "speech" and c["voice"]["backend"] != "moss":
         return None
     if purpose == "vl" and not c["moss"].get("vl_checks", True):

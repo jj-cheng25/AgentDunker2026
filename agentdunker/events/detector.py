@@ -38,7 +38,7 @@ def ensure_weights(path: Path = DEFAULT_WEIGHTS) -> Path:
         return path
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".part")
-    urllib.request.urlretrieve(WEIGHTS_URL, tmp)
+    __import__("agentdunker.weights", fromlist=["x"]).fetch_for_module("deim_m_640.onnx", tmp)
     digest = hashlib.sha256(tmp.read_bytes()).hexdigest()
     if digest != WEIGHTS_SHA256:
         tmp.unlink()

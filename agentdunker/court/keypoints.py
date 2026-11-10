@@ -22,7 +22,7 @@ def ensure_model(path: Path = MODEL_PATH) -> Path:
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
         logger.info("downloading court keypoint model to %s", path)
-        urllib.request.urlretrieve(MODEL_URL, path)
+        __import__("agentdunker.weights", fromlist=["x"]).fetch_for_module("court-33-yolo11m-pose.onnx", path)
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
         if digest != MODEL_SHA256:
             path.unlink()

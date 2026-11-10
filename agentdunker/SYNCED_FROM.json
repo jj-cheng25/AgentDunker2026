@@ -7,7 +7,7 @@
    "source_package": "adk_tracking",
    "commit": "4f7005faaf266bbd860978785ebad6654cff6206",
    "files": 19,
-   "tree_sha256": "251667572fbeae2c",
+   "tree_sha256": "b8fb0d32397114fa",
    "rules": [
     {
      "file": "__main__.py",
@@ -24,6 +24,14 @@
     {
      "file": "models.py",
      "why": "weights live in the agentdunker model dir"
+    },
+    {
+     "file": "models.py",
+     "why": "downloads: retries/mirrors, none in --offline"
+    },
+    {
+     "file": "models.py",
+     "why": "unused after the download rule"
     },
     {
      "file": "models.py",
@@ -73,7 +81,7 @@
    "source_package": "adk_court",
    "commit": "85772b75865eb72c9671801c6e8516d30741ddd7",
    "files": 16,
-   "tree_sha256": "0b93108d5efbfa88",
+   "tree_sha256": "e98336d28852f645",
    "rules": [
     {
      "file": "__main__.py",
@@ -86,6 +94,10 @@
     {
      "file": "keypoints.py",
      "why": "weights live in the agentdunker model dir"
+    },
+    {
+     "file": "keypoints.py",
+     "why": "downloads: retries/mirrors, none in --offline"
     }
    ]
   },
@@ -95,7 +107,7 @@
    "source_package": "adk_identity",
    "commit": "447097e9c5dd975a5627930b6490d13ad1721b61",
    "files": 12,
-   "tree_sha256": "c5210761ff24de01",
+   "tree_sha256": "2ccd50dab0662a7e",
    "rules": [
     {
      "file": "__main__.py",
@@ -108,6 +120,10 @@
     {
      "file": "games.py",
      "why": "official data dir is configurable"
+    },
+    {
+     "file": "names_zh.py",
+     "why": "no live name lookup in --offline"
     },
     {
      "file": "vlm.py",
@@ -133,7 +149,7 @@
    "source_package": "adk_replay",
    "commit": "409d019956970078c6f2a2f92ab70b9583c69d8f",
    "files": 42,
-   "tree_sha256": "c132b86f9c002080",
+   "tree_sha256": "e22f305654dd230a",
    "rules": [
     {
      "file": "__main__.py",
@@ -154,6 +170,10 @@
     {
      "file": "browser.py",
      "why": "use the Playwright-managed Chromium"
+    },
+    {
+     "file": "browser.py",
+     "why": "no Chromium background networking"
     }
    ]
   },
@@ -163,7 +183,7 @@
    "source_package": "adk_events",
    "commit": "e98e14529a122ad44176493cd8cf7f758afa26aa",
    "files": 22,
-   "tree_sha256": "8965ca14487b8b07",
+   "tree_sha256": "efb0b001322dd9b8",
    "rules": [
     {
      "file": "official.py",
@@ -176,6 +196,14 @@
     {
      "file": "pose.py",
      "why": "weights live in the agentdunker model dir"
+    },
+    {
+     "file": "detector.py",
+     "why": "downloads: retries/mirrors, none in --offline"
+    },
+    {
+     "file": "pose.py",
+     "why": "no silent Ultralytics download into the working directory"
     },
     {
      "file": "detector.py",
@@ -227,7 +255,7 @@
    "source_package": "agentdunker",
    "commit": "3b8bc01ba685d45b10b2f038766649c7e10c4be5",
    "files": 30,
-   "tree_sha256": "20ea44179d8cd725",
+   "tree_sha256": "926807016cca2a8f",
    "rules": [
     {
      "file": "season.py",
@@ -252,6 +280,10 @@
     {
      "file": "render/promo.py",
      "why": "no Chromium must not fail the mux"
+    },
+    {
+     "file": "render/promo.py",
+     "why": "no Chromium background networking"
     },
     {
      "file": "models.py",

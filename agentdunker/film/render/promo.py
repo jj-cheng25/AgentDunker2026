@@ -67,7 +67,8 @@ def _render_page(page: Path, times: list[float], enc: Optional[Encoder] = None, 
     kept = {}
     with sync_playwright() as p:
         browser = p.chromium.launch(executable_path=chromium_executable(),
-                                    args=["--no-sandbox", "--allow-file-access-from-files"])
+                                    args=["--no-sandbox", "--allow-file-access-from-files",
+                                          *__import__("agentdunker.weights", fromlist=["x"]).CHROMIUM_QUIET_FLAGS])
         pg = browser.new_page(viewport={"width": 1920, "height": 1080}, device_scale_factor=1)
         pg.goto(page.as_uri())
         pg.evaluate("ready()")

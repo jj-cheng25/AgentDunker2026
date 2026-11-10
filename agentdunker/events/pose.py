@@ -27,7 +27,7 @@ class PoseNear:
 
         torch.set_num_threads(threads)
         w = weights or DEFAULT_POSE
-        self.model = YOLO(str(w) if Path(w).exists() else "yolo11x-pose.pt")
+        self.model = YOLO(str(w) if Path(w).exists() else str(__import__("agentdunker.weights", fromlist=["x"]).fetch_for_module("yolo11x-pose.pt", w)))
 
     def people(self, frame: np.ndarray, center: tuple[float, float], size: int = 640) -> list[Person]:
         h, w = frame.shape[:2]

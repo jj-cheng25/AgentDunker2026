@@ -36,9 +36,22 @@ def preflight() -> list[str]:
     missing = [a.name for a in weights.ASSETS if config.get()["run"]["preset"] in a.presets and weights.status(a) != "ok"]
     if missing:
         out.append(f"missing weights/assets: {', '.join(missing)} — run `agentdunker download-models`")
-    if not weights.chromium_path():
-        out.append("no Chromium: no 3D replay or transition — run `agentdunker download-models`")
     return out
+
+
+SKIPPED_WITHOUT_CHROMIUM = "the 3D replay, intro, outro and transition will be skipped"
+
+
+def chromium_problem() -> str | None:
+    """None if Chromium starts; else what is wrong and how to fix it (several lines)."""
+    ok, detail = weights.chromium_check()
+    if ok:
+        return None
+    if detail == "not installed":
+        return f"Chromium is not installed: {SKIPPED_WITHOUT_CHROMIUM}.\n  fix: agentdunker download-models"
+    return (f"Chromium cannot start ({weights.chromium_path()}):\n  {detail}\n"
+            f"  → {SKIPPED_WITHOUT_CHROMIUM}.\n"
+            f"  fix (installs Chromium's system libraries): {weights.chromium_fix()}")
 
 
 def doctor(verify: bool = False, ping: bool = False) -> int:
@@ -56,8 +69,14 @@ def doctor(verify: bool = False, ping: bool = False) -> int:
         p = shutil.which(tool)
         ver = subprocess.run([p, "-version"], capture_output=True, text=True).stdout.split("\n")[0][:60] if p else ""
         ok &= _line(bool(p), tool, ver, "install ffmpeg ≥ 6 with libx264 (apt install ffmpeg / conda install ffmpeg)")
-    ch = weights.chromium_path()
-    ok &= _line(bool(ch), "chromium", ch or "not found", "agentdunker download-models  (Playwright Chromium)")
+    ch_ok, ch_detail = weights.chromium_check()
+    if ch_ok:
+        _line(True, "chromium (launch test)", ch_detail)
+    elif ch_detail == "not installed":
+        ok &= _line(False, "chromium", "not installed", "agentdunker download-models  (Playwright Chromium)")
+    else:
+        ok &= _line(False, "chromium (launch test)", f"cannot start: {ch_detail}",
+                    f"{weights.chromium_fix()}   (Chromium's system libraries; without them no 3D, intro, outro)")
     from .device import torch_device
     _line(True, "compute device", torch_device() + ("" if torch_device() == "cuda" else " (no CUDA GPU seen)"))
     _line(True, "threads", str(config.threads()))
