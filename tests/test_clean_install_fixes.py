@@ -23,8 +23,9 @@ class _Flaky(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):  # noqa: N802
         rng = self.headers.get("Range")
-        start = int(rng.split("=")[1].split("-")[0]) if rng else 0
-        body = self.DATA[start:]
+        start, end = (rng.split("=")[1].split("-") if rng else ("0", ""))
+        start = int(start)
+        body = self.DATA[start:int(end) + 1] if end else self.DATA[start:]
         _Flaky.requests.append(start)
         self.send_response(206 if rng else 200)
         self.send_header("Content-Length", str(len(body)))
@@ -126,7 +127,7 @@ def test_run_warns_loudly_but_still_makes_a_film(broken_chrome, tmp_path, capsys
     assert rc == 0 and (tmp_path / "out" / "film.mp4").exists()
     rep = json.loads((tmp_path / "out" / "report.json").read_text())
     assert rep["agentdunker"]["chromium"]["ok"] is False
-    assert not (tmp_path / "out" / "work" / "tmp").exists()          # private TMPDIR removed
+    assert not list(Path(weights.short_tmpdir()).glob("adk-run-*"))     # private TMPDIR removed
 
 
 # ---------------------------------------------------------------- 2. no network in --offline
@@ -172,3 +173,92 @@ def test_chromium_flags_disable_background_networking():
     src = (Path(weights.__file__).parent / "replay" / "browser.py").read_text()
     assert "CHROMIUM_QUIET_FLAGS" in src
     assert "CHROMIUM_QUIET_FLAGS" in (Path(weights.__file__).parent / "film" / "render" / "promo.py").read_text()
+
+
+# ---------------------------------------------------------------- review of 23e7d54
+def test_download_no_chromium_without_chromium_is_ok(tmp_path, monkeypatch, capsys):
+    """--no-chromium, every asset present, no Chromium anywhere → exit 0, no launch test."""
+    config.override(paths={"model_dir": str(tmp_path)})
+    data = b"x" * 10
+    a = weights.Asset("x.bin", "http://127.0.0.1:9/x.bin", hashlib.sha256(data).hexdigest(), 10, "MIT", "test")
+    (tmp_path / "x.bin").write_bytes(data)
+    monkeypatch.setattr(weights, "ASSETS", [a])
+    monkeypatch.setattr(weights, "BY_NAME", {"x.bin": a})
+    monkeypatch.setattr(weights, "chromium_path", lambda: None)
+    monkeypatch.setattr(weights, "chromium_check", lambda *a, **k: pytest.fail("launch test without a Chromium"))
+    assert cli.main(["download-models", "--no-chromium"]) == 0
+    assert "Chromium" not in capsys.readouterr().out
+
+
+def test_failed_chromium_install_reported_once(tmp_path, monkeypatch, capsys):
+    config.override(paths={"model_dir": str(tmp_path)})
+    monkeypatch.setattr(weights, "ASSETS", [])
+    monkeypatch.setattr(weights, "chromium_path", lambda: None)
+    monkeypatch.setattr(weights, "install_chromium", lambda log=print: False)
+    assert cli.main(["download-models"]) == 1
+    out = capsys.readouterr().out
+    assert out.count("failed: chromium") == 1 and "Chromium cannot start" not in out and "again" in out
+
+
+def test_chromium_that_renders_but_aborts_on_exit_is_ok(tmp_path, monkeypatch):
+    exe = tmp_path / "chrome"
+    exe.write_text("#!/bin/sh\necho '<html><head></head><body></body></html>'\n"
+                   "echo 'ERROR:content/zygote/zygote_linux.cc:662] write: Broken pipe (32)' >&2\nulimit -c 0\nkill -6 $$\n")
+    exe.chmod(exe.stat().st_mode | stat.S_IEXEC)
+    monkeypatch.setenv("ADK_CHROMIUM", str(exe))
+    weights._CHECK.clear()
+    assert weights.chromium_check()[0]
+    weights._CHECK.clear()
+
+
+def test_fetch_for_module_verifies_checksum(tmp_path, flaky_server, monkeypatch):
+    monkeypatch.setenv("no_proxy", "127.0.0.1")
+    _Flaky.cuts = 0
+    a = weights.Asset("w.bin", flaky_server, "e" * 64, len(_Flaky.DATA), "MIT", "test")
+    monkeypatch.setattr(weights, "BY_NAME", {"w.bin": a})
+    with pytest.raises(RuntimeError, match="checksum"):
+        weights.fetch_for_module("w.bin", tmp_path / "w.bin")
+    assert not (tmp_path / "w.bin").exists()
+
+
+def test_oversized_range_piece_is_restarted(tmp_path, flaky_server, monkeypatch):
+    monkeypatch.setenv("no_proxy", "127.0.0.1")
+    _Flaky.cuts = 0
+    tmp = tmp_path / "big.part"
+    (tmp_path / "big.part.0").write_bytes(b"\0" * (len(_Flaky.DATA)))       # piece 0 far longer than its range
+    weights._fetch_ranges(flaky_server, tmp, len(_Flaky.DATA), parts=4)
+    assert tmp.read_bytes() == _Flaky.DATA
+
+
+def test_promo_cache_needs_completion_marker(tmp_path, monkeypatch):
+    from agentdunker import run
+    from agentdunker.film.render import promo
+    monkeypatch.setattr(promo, "_cache_dir", lambda: tmp_path)
+    for f in run.PROMO_FILES:
+        (tmp_path / f).write_bytes(b"x")                                   # e.g. an interrupted old render
+    assert not run.promo_ready()
+    (tmp_path / ".complete").write_text("ok\n")
+    assert run.promo_ready()
+    src = Path(promo.__file__).read_text()
+    assert 'os.replace(d, final)' in src and '.part{os.getpid()}' in src
+
+
+def test_yolo_config_dir_follows_cache_dir(tmp_path, monkeypatch):
+    import agentdunker
+    monkeypatch.setattr(agentdunker, "USER_YOLO_CONFIG_DIR", None)
+    config.override(paths={"cache_dir": str(tmp_path / "c")})
+    config.apply()
+    assert os.environ["YOLO_CONFIG_DIR"] == str(tmp_path / "c" / "ultralytics")
+    assert os.environ["YOLO_OFFLINE"] == "true"
+
+
+def test_short_tmpdir_avoids_long_paths(tmp_path, monkeypatch):
+    """Chromium aborts when $TMPDIR is too long for its Unix sockets (seen with TMPDIR on a deep /inspire path)."""
+    import tempfile
+    deep = tmp_path / ("d" * 60) / ("e" * 30)
+    deep.mkdir(parents=True)
+    monkeypatch.setenv("TMPDIR", str(deep))
+    monkeypatch.setattr(tempfile, "tempdir", None)
+    d = weights.short_tmpdir()
+    assert d != str(deep) and len(d) + weights.SOCKET_HEADROOM <= 107
+    monkeypatch.setattr(tempfile, "tempdir", None)

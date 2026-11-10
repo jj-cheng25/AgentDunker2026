@@ -164,6 +164,25 @@ RULES: list[Rule] = [
          '                                          *__import__("agentdunker.weights", fromlist=["x"]).CHROMIUM_QUIET_FLAGS]',
          "no Chromium background networking"),
 
+    # intro/outro cache: render beside it and rename when complete (an interrupted first run left a truncated
+    # outro_score.wav that counted as cached); a .complete marker is the readiness test. Cache hash unchanged.
+    Rule("m7", "render/promo.py",
+         '    if all((d / f).exists() for f in ("intro.mp4", "outro.mp4", "cover.png", "intro_score.wav", "outro_score.wav")):\n'
+         '        return d\n    d.mkdir(parents=True, exist_ok=True)\n',
+         '    if (d / ".complete").exists() and all((d / f).exists() for f in ("intro.mp4", "outro.mp4", "cover.png",\n'
+         '                                                                     "intro_score.wav", "outro_score.wav")):\n'
+         '        return d\n'
+         '    final, d = d, d.with_name(f"{d.name}.part{os.getpid()}")    # render beside the cache, rename when complete\n'
+         '    shutil.rmtree(d, ignore_errors=True)\n    d.mkdir(parents=True, exist_ok=True)\n',
+         "atomic intro/outro cache"),
+    Rule("m7", "render/promo.py",
+         '        subprocess.run([sys.executable, f"{name}_sound.py"], cwd=d, check=True, capture_output=True, timeout=600)\n'
+         '    return d\n',
+         '        subprocess.run([sys.executable, f"{name}_sound.py"], cwd=d, check=True, capture_output=True, timeout=600)\n'
+         '    (d / ".complete").write_text("ok\\n")\n'
+         '    shutil.rmtree(final, ignore_errors=True)\n    os.replace(d, final)\n    return final\n',
+         "atomic intro/outro cache"),
+
     # ------------------------------------------------------------------ GPU when available (agentdunker.device)
     Rule("m1", "models.py", "        self.model.load_state_dict(state)\n",
          "        self.model.load_state_dict(state)\n        self.model.to(_device())\n", "ReID on GPU when available"),

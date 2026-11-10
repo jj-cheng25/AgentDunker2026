@@ -127,24 +127,27 @@ def cmd_download(a) -> int:
     print(f"model dir: {weights.model_dir()}")
     failed = weights.download(names=a.only.split(",") if a.only else None, preset=a.preset, force=a.force)
     if not a.only:
+        installed = True
         if not a.no_chromium and not weights.chromium_path():
-            if not weights.install_chromium():
+            installed = weights.install_chromium()
+            if not installed:
                 failed.append("chromium")
         elif weights.chromium_path():
             print(f"  ok        Chromium {weights.chromium_path()}")
-        ok, detail = weights.chromium_check()
-        if not ok:
-            print(f"  FAILED    Chromium cannot start: {detail}\n            fix: {weights.chromium_fix()}")
-            failed.append("chromium (system libraries)")
-        elif not failed and not a.no_prerender:
-            from .run import prerender_promo, promo_ready
-            if not promo_ready():
-                print("  render    intro/outro once (≈ 6 min on 16 CPU threads; later films reuse it)", flush=True)
-                t0 = time.monotonic()
-                prerender_promo()
-                print(f"  {'ok' if promo_ready() else 'FAILED':9s} intro/outro ({time.monotonic() - t0:.0f} s)")
-            else:
-                print("  ok        intro/outro (cached)")
+        if installed and weights.chromium_path():          # launch test only for an installed Chromium
+            ok, detail = weights.chromium_check()
+            if not ok:
+                print(f"  FAILED    Chromium cannot start: {detail}\n            fix: {weights.chromium_fix()}")
+                failed.append("chromium (system libraries)")
+            elif not failed and not a.no_prerender:
+                from .run import prerender_promo, promo_ready
+                if not promo_ready():
+                    print("  render    intro/outro once (≈ 6 min on 16 CPU threads; later films reuse it)", flush=True)
+                    t0 = time.monotonic()
+                    prerender_promo()
+                    print(f"  {'ok' if promo_ready() else 'FAILED':9s} intro/outro ({time.monotonic() - t0:.0f} s)")
+                else:
+                    print("  ok        intro/outro (cached)")
     if failed:
         print(f"failed: {', '.join(failed)}\n"
               "→ run `agentdunker download-models` again: finished files are kept, partial ones resume.")

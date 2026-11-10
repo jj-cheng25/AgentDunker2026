@@ -215,6 +215,9 @@ def _fetch_ranges(url: str, tmp: Path, size: int, parts: int = 8) -> None:
         part = pieces[i]
         for attempt in range(RETRIES + 1):
             have = part.stat().st_size if part.exists() else 0
+            if have > b - a + 1:              # longer than its range: corrupt, start this piece again
+                part.unlink()
+                have = 0
             if have == b - a + 1:
                 return
             try:
@@ -223,9 +226,12 @@ def _fetch_ranges(url: str, tmp: Path, size: int, parts: int = 8) -> None:
                     if r.status != 206:
                         raise OSError(f"server ignored the range request (HTTP {r.status})")
                     shutil.copyfileobj(r, f, 1 << 20)
-                if part.stat().st_size == b - a + 1:
+                got = part.stat().st_size
+                if got == b - a + 1:
                     return
-                raise OSError("short read")
+                if got > b - a + 1:
+                    part.unlink()
+                raise OSError("short read" if got < b - a + 1 else "piece longer than its range")
             except OSError:
                 if attempt == RETRIES:
                     raise
@@ -280,9 +286,13 @@ def fetch_for_module(name: str, dst) -> Path:
     for url in (a.url, *a.mirrors):
         try:
             _fetch(url, dst, a.size)
-            return dst
         except Exception as e:  # noqa: BLE001
             err = e
+            continue
+        if sha256(dst) == a.sha256:
+            return dst
+        dst.unlink()
+        err = "checksum mismatch"
     raise RuntimeError(f"could not download {name}: {err}; run `agentdunker download-models`")
 
 
@@ -331,6 +341,41 @@ CHROMIUM_QUIET_FLAGS = ["--disable-background-networking", "--disable-component-
                         "--no-default-browser-check", "--disable-sync", "--disable-default-apps",
                         "--disable-domain-reliability", "--disable-breakpad", "--metrics-recording-only"]
 _CHECK: dict = {}
+# Chromium creates Unix sockets under $TMPDIR (".org.chromium.Chromium.XXXXXX/SingletonSocket" and the like);
+# AF_UNIX paths are limited to 108 bytes, so a long TMPDIR makes it abort (exit -6 / 134, zygote "Broken pipe").
+SOCKET_HEADROOM = 64
+
+
+def no_core_dumps() -> None:
+    """Core dumps of crashed children (Chromium aborts) hold process memory, credentials included: never write them."""
+    try:
+        import resource
+        resource.setrlimit(resource.RLIMIT_CORE, (0, resource.getrlimit(resource.RLIMIT_CORE)[1]))
+    except (ImportError, ValueError, OSError):
+        pass
+
+
+def _unix_socket_ok(d: str) -> bool:
+    import socket
+    p = os.path.join(d, f"adk-{os.getpid()}.sock")
+    s = socket.socket(socket.AF_UNIX)
+    try:
+        s.bind(p)
+        return True
+    except OSError:
+        return False
+    finally:
+        s.close()
+        if os.path.exists(p):
+            os.unlink(p)
+
+
+def short_tmpdir() -> str:
+    """A writable temp dir short enough for Chromium's sockets: $TMPDIR if it qualifies, else /tmp, /var/tmp, /dev/shm."""
+    for d in (tempfile.gettempdir(), os.environ.get("TMPDIR"), "/tmp", "/var/tmp", "/dev/shm"):
+        if d and len(d) + SOCKET_HEADROOM <= 107 and os.path.isdir(d) and os.access(d, os.W_OK) and _unix_socket_ok(d):
+            return d
+    return "/tmp"
 
 
 def chromium_check(timeout: float = 30) -> tuple[bool, str]:
@@ -340,21 +385,32 @@ def chromium_check(timeout: float = 30) -> tuple[bool, str]:
         return False, "not installed"
     if exe in _CHECK:
         return _CHECK[exe]
-    with tempfile.TemporaryDirectory(prefix="adk-chromium-check-") as d:
-        cmd = [exe, "--headless", "--no-sandbox", "--disable-gpu", *CHROMIUM_QUIET_FLAGS, f"--user-data-dir={d}",
-               "--dump-dom", "about:blank"]
-        try:
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env={**os.environ, "TMPDIR": d})
-            lines = [l for l in (r.stderr or "").splitlines() if l.strip()]
-            bad = r.returncode != 0
-            msg = next((l for l in lines if "error" in l.lower()), lines[0] if lines else f"exit code {r.returncode}")
-            res = (False, f"exit code {r.returncode}: {msg.strip()[:200]}") if bad else (True, exe)
-        except subprocess.TimeoutExpired:
-            res = (False, f"did not finish within {timeout:.0f} s")
-        except OSError as e:
-            res = (False, f"{type(e).__name__}: {e}")
+    res = (False, "not checked")
+    for _ in range(2):        # one retry: headless --dump-dom sometimes aborts on exit (zygote "Broken pipe")
+        res = _launch_once(exe, timeout)
+        if res[0]:
+            break
     _CHECK[exe] = res
     return res
+
+
+def _launch_once(exe: str, timeout: float) -> tuple[bool, str]:
+    with tempfile.TemporaryDirectory(prefix="adk-chk-", dir=short_tmpdir()) as d:
+        cmd = [exe, "--headless", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage", *CHROMIUM_QUIET_FLAGS,
+               f"--user-data-dir={d}", "--dump-dom", "about:blank"]
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env={**os.environ, "TMPDIR": d},
+                               preexec_fn=no_core_dumps)
+        except subprocess.TimeoutExpired:
+            return False, f"did not finish within {timeout:.0f} s"
+        except OSError as e:
+            return False, f"{type(e).__name__}: {e}"
+    if "<html" in (r.stdout or "").lower():    # it rendered a page: usable, whatever the exit code on shutdown
+        return True, exe
+    lines = [l.strip() for l in (r.stderr or "").splitlines() if l.strip()]
+    msg = next((l for l in lines if "shared librar" in l or "No such file" in l),
+               lines[-1] if lines else "no output")
+    return False, f"exit code {r.returncode}: {msg[:200]}"
 
 
 def chromium_fix() -> str:

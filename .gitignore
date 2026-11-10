@@ -22,3 +22,6 @@ runs/
 /agentdunker.toml
 *.key
 .env
+# core dumps (contain process memory, may include credentials)
+core
+core.*

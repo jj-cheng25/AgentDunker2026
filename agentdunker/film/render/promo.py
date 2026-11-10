@@ -141,8 +141,11 @@ def _cache_dir() -> Path:
 def build_fixed() -> Path:
     """Render intro/outro (6 s, 1080p30) and the cover once from the project sources; cached by source hash."""
     d = _cache_dir()
-    if all((d / f).exists() for f in ("intro.mp4", "outro.mp4", "cover.png", "intro_score.wav", "outro_score.wav")):
+    if (d / ".complete").exists() and all((d / f).exists() for f in ("intro.mp4", "outro.mp4", "cover.png",
+                                                                     "intro_score.wav", "outro_score.wav")):
         return d
+    final, d = d, d.with_name(f"{d.name}.part{os.getpid()}")    # render beside the cache, rename when complete
+    shutil.rmtree(d, ignore_errors=True)
     d.mkdir(parents=True, exist_ok=True)
     times = [i / FPS for i in range(int(6 * FPS))]
     enc = Encoder(d / "outro.mp4")
@@ -158,7 +161,10 @@ def build_fixed() -> Path:
     for name in ("intro", "outro"):
         shutil.copy(PROMO / f"{name}_sound.py", d / f"{name}_sound.py")
         subprocess.run([sys.executable, f"{name}_sound.py"], cwd=d, check=True, capture_output=True, timeout=600)
-    return d
+    (d / ".complete").write_text("ok\n")
+    shutil.rmtree(final, ignore_errors=True)
+    os.replace(d, final)
+    return final
 
 
 def fixed_clip(name: str) -> Path:

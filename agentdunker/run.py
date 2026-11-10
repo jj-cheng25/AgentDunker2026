@@ -66,7 +66,7 @@ def promo_ready() -> bool:
     """Intro / outro / cover already rendered for the current promo sources and fonts?"""
     from .film.render import promo
     d = promo._cache_dir()
-    return all((d / f).exists() for f in PROMO_FILES)
+    return (d / ".complete").exists() and all((d / f).exists() for f in PROMO_FILES)
 
 
 def hook_promo() -> None:
@@ -135,9 +135,11 @@ def make_film(clip: str, out_dir: str, *, reuse: Optional[str] = None, skip: tup
     root.addHandler(fh)
     if root.level == logging.NOTSET or root.level > logging.INFO:
         root.setLevel(logging.INFO)
-    # A private temp dir for the run (stages, Chromium's org.chromium.* dirs), removed afterwards.
-    tmp = Path(out_dir).resolve() / "work" / "tmp"
-    tmp.mkdir(parents=True, exist_ok=True)
+    # A private temp dir for the run (stages, Chromium's org.chromium.* dirs), removed afterwards. It must be a
+    # short path: Chromium's Unix sockets live under $TMPDIR (108-byte limit), so never under the output dir.
+    from .weights import no_core_dumps, short_tmpdir
+    no_core_dumps()                       # inherited by every stage and Chromium
+    tmp = Path(tempfile.mkdtemp(prefix="adk-run-", dir=short_tmpdir()))
     old_tmp = os.environ.get("TMPDIR")
     os.environ["TMPDIR"] = str(tmp)
     tempfile.tempdir = None

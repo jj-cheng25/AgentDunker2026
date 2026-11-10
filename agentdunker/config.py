@@ -167,7 +167,8 @@ def apply() -> None:
     # Ultralytics: no online check, telemetry or Sentry in any mode (it contacted one.one.one.one and
     # google-analytics during --offline runs); its settings file lives in our cache, not in ~/.config.
     env["YOLO_OFFLINE"] = "true"
-    env["YOLO_CONFIG_DIR"] = os.environ.get("YOLO_CONFIG_DIR", str(cache / "ultralytics"))
+    from . import USER_YOLO_CONFIG_DIR
+    env["YOLO_CONFIG_DIR"] = USER_YOLO_CONFIG_DIR or str(cache / "ultralytics")
     if str(c["run"].get("offline")).lower() in ("1", "true", "yes"):
         env.update(ADK_OFFLINE="1", HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1")
     if l.provider == "mosshub":

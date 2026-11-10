@@ -255,7 +255,7 @@
    "source_package": "agentdunker",
    "commit": "3b8bc01ba685d45b10b2f038766649c7e10c4be5",
    "files": 30,
-   "tree_sha256": "926807016cca2a8f",
+   "tree_sha256": "98037fecb50e9aa8",
    "rules": [
     {
      "file": "season.py",
@@ -284,6 +284,14 @@
     {
      "file": "render/promo.py",
      "why": "no Chromium background networking"
+    },
+    {
+     "file": "render/promo.py",
+     "why": "atomic intro/outro cache"
+    },
+    {
+     "file": "render/promo.py",
+     "why": "atomic intro/outro cache"
     },
     {
      "file": "models.py",

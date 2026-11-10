@@ -11,11 +11,9 @@ import os as _os
 __version__ = "0.1.0"
 
 # Before anything can import ultralytics (also in stage subprocesses): no online check / telemetry / Sentry.
+# Its settings file goes to <cache_dir>/ultralytics; config.apply() moves it if paths.cache_dir is configured,
+# unless the user set YOLO_CONFIG_DIR themselves.
+USER_YOLO_CONFIG_DIR = _os.environ.get("YOLO_CONFIG_DIR")
 _os.environ["YOLO_OFFLINE"] = "true"
-_os.environ.setdefault("YOLO_CONFIG_DIR", _os.path.join(_os.environ.get("XDG_CACHE_HOME") or
-                                                        _os.path.expanduser("~/.cache"), "agentdunker", "ultralytics"))
-
-
-def make_film(clip: str, out_dir: str, **kw):
-    from .run import make_film as _make_film
-    return _make_film(clip, out_dir, **kw)
+_os.environ.setdefault("YOLO_CONFIG_DIR", _os.path.join(_os.environ.get("XDG_CACHE_HOME") or _os.path.expanduser(
+    "~/.cache"), "agentdunker", "cache", "ultralytics"))

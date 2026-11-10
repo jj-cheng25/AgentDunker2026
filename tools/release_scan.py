@@ -68,6 +68,8 @@ def main() -> int:
             findings.append(f"{rel}: media/weights extension")
         if data.startswith(b"RIFF") and data[8:12] in RIFF_MEDIA:
             findings.append(f"{rel}: looks like RIFF {data[8:12].decode()} (audio/video)")
+        if data.startswith(b"\x7fELF") or re.fullmatch(r"(.*/)?core(\.\d+)?", rel):
+            findings.append(f"{rel}: ELF binary or core dump (may hold process memory)")
         for a, b, what in MAGIC:
             if data.startswith(a) and (b is None or data[4:8] == b):
                 findings.append(f"{rel}: looks like {what}")
@@ -86,7 +88,7 @@ def main() -> int:
         size = int(git("cat-file", "-s", sha))
         if ALLOW_LARGE.get(name) == sha:
             continue
-        if size > MAX_BYTES or BAD_EXT.search(name):
+        if size > MAX_BYTES or BAD_EXT.search(name) or re.fullmatch(r"(.*/)?core(\.\d+)?", name):
             findings.append(f"history: {name} ({size / 1e6:.1f} MB)")
     hist = git("log", "--all", "-p", "--no-color")
     for rx, what in SECRET:
