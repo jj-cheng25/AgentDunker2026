@@ -17,3 +17,9 @@ USER_YOLO_CONFIG_DIR = _os.environ.get("YOLO_CONFIG_DIR")
 _os.environ["YOLO_OFFLINE"] = "true"
 _os.environ.setdefault("YOLO_CONFIG_DIR", _os.path.join(_os.environ.get("XDG_CACHE_HOME") or _os.path.expanduser(
     "~/.cache"), "agentdunker", "cache", "ultralytics"))
+
+
+def make_film(clip: str, out_dir: str, **kw):
+    """Make the film for ``clip`` into ``out_dir`` (see ``agentdunker.run.make_film``); imports lazily."""
+    from .run import make_film as _make_film
+    return _make_film(clip, out_dir, **kw)
