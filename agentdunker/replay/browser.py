@@ -118,7 +118,8 @@ class _Page:
     """One headless browser with the replay page loaded."""
 
     def __init__(self, server_port: int, width: int, height: int) -> None:
-        self.profile = tempfile.TemporaryDirectory(prefix="adk-replay-")
+        # Chromium child processes can still be writing the profile when it is removed; never fail a render on that.
+        self.profile = tempfile.TemporaryDirectory(prefix="adk-replay-", ignore_cleanup_errors=True)
         self.logs = tempfile.TemporaryFile()
         self.browser = subprocess.Popen(
             [_chromium(), "--headless", "--no-sandbox", *__import__("agentdunker.weights", fromlist=["x"]).CHROMIUM_QUIET_FLAGS, "--disable-dev-shm-usage", "--enable-unsafe-swiftshader",

@@ -147,9 +147,9 @@
    "module": "m4",
    "branch_worktree": "adk-cmd-m4",
    "source_package": "adk_replay",
-   "commit": "409d019956970078c6f2a2f92ab70b9583c69d8f",
+   "commit": "645317af11dc6f9503041b8cdf2b21aff9492381",
    "files": 42,
-   "tree_sha256": "e22f305654dd230a",
+   "tree_sha256": "7224de6584107f7c",
    "rules": [
     {
      "file": "__main__.py",

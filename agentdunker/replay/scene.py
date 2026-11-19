@@ -282,6 +282,12 @@ def build_play(tracks: dict, court: dict, identity: Optional[dict] = None, event
     _add_marks(players)
     ball, ball_note = _ball_segments(events, shooter, release, t0, t1, {p.track_id for p in paths}, cfg)
     report["ball"] = ball_note
+    # off/def are fixed for the whole window, possession is not: say so when the defence has the ball.
+    def_ids = {p["id"] for p in players if p["team"] == "def"}
+    on_def = sorted({i for s in ball for i in (s.get("hold"), s.get("shot"), *s.get("pass", [])) if i in def_ids},
+                    key=lambda i: int(i[1:]))
+    if on_def:
+        report["degraded"].append(f"ball with defence-labelled players {on_def} (possession change in the window, or a team error)")
     teams = {k: TEAM_ZH.get(v, v) for k, v in abbr.items()}
     title, report["title_source"] = _resolve_title(title, events, teams)
     report["title"] = title

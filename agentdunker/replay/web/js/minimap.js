@@ -279,6 +279,14 @@ export class Minimap {
     g.lineWidth = 1; g.globalAlpha = 1; g.lineJoin = 'miter'; g.lineCap = 'butt'; g.setLineDash([]);
     const pos = Object.fromEntries(this.play.players.map((p) => [p.id, this.tl.pos(p.id, t)]));
     const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+    const nearest = (p, group) => {
+      let best = null;
+      for (const d of group) {
+        const k = dist(pos[p.id], pos[d.id]);
+        if (!best || k < best.k) best = { d, k };
+      }
+      return best;
+    };
     const holder = this.tl.ballOwner(t);
     const seg = this.play.ball.find((b) => t >= b.t[0] && t <= b.t[1]);
     const inPossession = seg?.hold === holder;
@@ -299,15 +307,8 @@ export class Minimap {
     g.stroke();
     g.setLineDash([]);
 
-    // 每个进攻球员 → 最近防守人
-    const report = (this.rolesVerified ? this.off : []).map((p) => {
-      let best = null;
-      for (const d of this.def) {
-        const k = dist(pos[p.id], pos[d.id]);
-        if (!best || k < best.k) best = { d, k };
-      }
-      return { p, ...best };
-    });
+    // 每个进攻球员 → 最近防守人（没有防守球员时不画）
+    const report = (this.rolesVerified ? this.off : []).map((p) => ({ p, ...nearest(p, this.def) })).filter((r) => r.d);
     for (const r of report) {
       const open = r.k > OPEN_DIST && r.p.id !== holder;
       g.strokeStyle = open ? OPEN_COLOR : 'rgba(255,255,255,0.25)';
@@ -329,7 +330,7 @@ export class Minimap {
     for (const p of this.play.players) {
       const [x, y, s] = this._xy(...pos[p.id]);
       const off = p.team === 'off';
-      if (off && p.id === holder && inPossession) {
+      if (p.id === holder && inPossession) {   // the holder can be in either group (possession can change in a clip)
         g.strokeStyle = GOLD; g.lineWidth = 2;
         g.beginPath(); g.arc(x, y, 0.61 * s, 0, 2 * Math.PI); g.stroke();
       }
@@ -380,13 +381,18 @@ export class Minimap {
       this.el.intent.textContent = phase ? phase.intent : '';
     }
     const spacing = mean(this.off.map((p) => Math.min(...this.off.filter((q) => q !== p).map((q) => dist(pos[p.id], pos[q.id])))));
-    const chips = [`<span class="chip"><i>进攻平均间距</i><b>${spacing.toFixed(1)} m</b></span>`];
+    const chips = Number.isFinite(spacing) ? [`<span class="chip"><i>进攻平均间距</i><b>${spacing.toFixed(1)} m</b></span>`] : [];
     const rows = [];
     if (holder && inPossession) {
-      const h = this.off.find((p) => p.id === holder);
-      const r = report.find((x) => x.p.id === holder);
-      const n = this.def.filter((d) => dist(pos[holder], pos[d.id]) < PRESSURE_R).length;
-      chips.push(`<span class="chip"><i>最近防守距离</i><b>${r.k.toFixed(1)} m</b></span>`, `<span class="chip"><i>${PRESSURE_R} m 内防守</i><b style="color:${n >= 2 ? RED : 'inherit'}">${n} 人</b></span>`);
+      // off/def are fixed for the whole clip; the holder's defenders are the other group, whichever group he is in.
+      // No opponents (or an unknown holder) -> the two chips are left out, never shown as 0.
+      const h = this.play.players.find((p) => p.id === holder);
+      const rivals = h ? (h.team === 'def' ? this.off : this.def) : [];
+      const r = h ? nearest(h, rivals) : null;
+      if (r) {
+        const n = rivals.filter((d) => dist(pos[holder], pos[d.id]) < PRESSURE_R).length;
+        chips.push(`<span class="chip"><i>最近防守距离</i><b>${r.k.toFixed(1)} m</b></span>`, `<span class="chip"><i>${PRESSURE_R} m 内防守</i><b style="color:${n >= 2 ? RED : 'inherit'}">${n} 人</b></span>`);
+      }
       rows.push(`<b>持球</b> ${h ? who(h) : holder}`);
     }
     const open = report.filter((r) => r.k > OPEN_DIST && r.p.id !== holder).sort((a, b) => b.k - a.k);

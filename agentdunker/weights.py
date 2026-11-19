@@ -395,7 +395,8 @@ def chromium_check(timeout: float = 30) -> tuple[bool, str]:
 
 
 def _launch_once(exe: str, timeout: float) -> tuple[bool, str]:
-    with tempfile.TemporaryDirectory(prefix="adk-chk-", dir=short_tmpdir()) as d:
+    # Chromium children (zygote, crashpad) can outlive the main process and still write the profile.
+    with tempfile.TemporaryDirectory(prefix="adk-chk-", dir=short_tmpdir(), ignore_cleanup_errors=True) as d:
         cmd = [exe, "--headless", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage", *CHROMIUM_QUIET_FLAGS,
                f"--user-data-dir={d}", "--dump-dom", "about:blank"]
         try:

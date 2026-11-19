@@ -1,5 +1,9 @@
 """Synthetic smoke test: image px == court ft (H = translation), 10 players, one runs into the backcourt."""
+import copy
+import os
+
 import numpy as np
+import pytest
 
 from agentdunker.replay.scene import build_play
 
@@ -93,3 +97,83 @@ def test_title_option():
     assert play["title"] == "3D 战术复盘" and rep["title_source"] == "default"      # blank -> default
     long = clean_title("长" * 100)
     assert len(long) == TITLE_MAX_CHARS and long.endswith("…")
+
+
+def _pass_play(passer_team: str, receiver_team: str):
+    """Play with one pass at 2.0 s (the passer holds the ball 1.5-2.0 s); team = "off" / "def" as labelled by scene."""
+    tracks, court = _tracks()
+    labels, _ = build_play(tracks, court)
+    pick = lambda team, skip=(): next(int(p["id"][1:]) for p in labels["players"]   # noqa: E731
+                                      if p["team"] == team and p["id"] not in ("T4", *skip))   # T4 has a gap
+    a = pick(passer_team)
+    b = pick(receiver_team, skip=(f"T{a}",))
+    play, rep = build_play(tracks, court, events={"events": [{"type": "pass", "t": 2.0, "actors": [a, b], "conf": 0.9}]})
+    return play, rep, f"T{a}"
+
+
+def test_defence_holder_is_reported():
+    play, rep, holder = _pass_play("def", "off")
+    assert {"t": [1.5, 2.0], "hold": holder, "mode": "hands"} in play["ball"]
+    assert any(d.startswith(f"ball with defence-labelled players ['{holder}']") for d in rep["degraded"])
+    _, rep, _ = _pass_play("off", "off")
+    assert not any("defence-labelled" in d for d in rep["degraded"])
+
+
+def _chromium_ok() -> bool:
+    from agentdunker.replay.browser import _chromium
+    try:
+        return bool(_chromium())
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _stats_at(play: dict, t: float) -> str:
+    """Render one export frame in headless Chromium; return the side panel's stats text (page errors raise)."""
+    import functools
+    import http.server
+    import json
+    import threading
+
+    from agentdunker.replay.browser import WEB_ROOT, _Handler, _Page
+    body = json.dumps(play, ensure_ascii=False, allow_nan=False).encode()
+    server = http.server.ThreadingHTTPServer(
+        ("127.0.0.1", 0), functools.partial(_Handler, directory=str(WEB_ROOT), play_bytes=body))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    page = None
+    try:
+        page = _Page(server.server_port, 640, 360)
+        page.frame(t, t)
+        return page.cdp.evaluate("document.querySelector('[data-k=stats]').textContent")
+    finally:
+        if page:
+            page.close()
+        server.shutdown()
+        server.server_close()
+
+
+@pytest.mark.skipif(bool(os.environ.get("CI")) or not _chromium_ok(), reason="needs Chromium; skipped in CI")
+def test_render_any_holder():
+    """2026-11-19: a defence-labelled holder crashed every frame (minimap r.k); now each case renders."""
+    t = 1.75                                                   # inside the passer's hold
+    off_hold, _, _ = _pass_play("off", "off")
+    def_hold, _, def_id = _pass_play("def", "off")
+    tracks, court = _tracks()
+    no_ball, _ = build_play(tracks, court)                     # possession unknown everywhere
+    unknown = copy.deepcopy(def_hold)
+    for s in unknown["ball"]:
+        if s.get("hold") == def_id:
+            s["hold"] = "T99"
+    no_def = copy.deepcopy(off_hold)
+    no_def["players"] = [p for p in no_def["players"] if p["team"] == "off"]
+    no_off = copy.deepcopy(def_hold)                           # the pass target disappears too -> that segment hidden
+    no_off["players"] = [p for p in no_off["players"] if p["team"] == "def"]
+
+    for play in (off_hold, def_hold):
+        s = _stats_at(play, t)
+        assert "持球" in s and "最近防守距离" in s and "3 m 内防守" in s, s
+    for play in (unknown, no_ball):
+        assert "持球" not in _stats_at(play, t)
+    s = _stats_at(no_def, t)
+    assert "持球" in s and "最近防守距离" not in s, s
+    s = _stats_at(no_off, t)
+    assert "持球" in s and "最近防守距离" not in s and "进攻平均间距" not in s, s

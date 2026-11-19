@@ -40,6 +40,13 @@ async function loadPlay() {
 }
 
 const play = await loadPlay();
+{
+  // A ball segment naming a player who is not in the scene is hidden (possession unknown), as scene.py does,
+  // instead of failing every frame of the replay.
+  const ids = new Set(play.players.map((p) => p.id));
+  play.ball = (play.ball ?? []).map((s) => (
+    [s.hold, s.shot, ...(s.pass ?? [])].every((id) => id === undefined || ids.has(id)) ? s : { t: s.t, hidden: true }));
+}
 if (play.motion && play.motion.sourceSha256 !== play.metadata?.sourceSha256)
   throw new Error('Motion reconstruction is bound to another source video');
 const actorAliases = { points: 'anatomical-points', xbot: 'xbot-points', mesh: 'xbot-mesh' };
