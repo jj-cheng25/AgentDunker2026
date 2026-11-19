@@ -177,3 +177,11 @@ def test_render_any_holder():
     assert "持球" in s and "最近防守距离" not in s, s
     s = _stats_at(no_off, t)
     assert "持球" in s and "最近防守距离" not in s and "进攻平均间距" not in s, s
+
+
+def test_timeline_samples_stay_inside_the_window():
+    """2026-11-19 held-out h22: frame 192 of a 3.2 s window sampled 3.2000000000000006; the renderer rejected it."""
+    from agentdunker.replay.compose import sample_timeline
+    knots = [[0.0, 0.0], [6.4, 3.2], [7.4, 3.2]]
+    ts = [sample_timeline(knots, i / 30) for i in range(int(7.4 * 30) + 1)]
+    assert min(ts) >= 0.0 and max(ts) <= 3.2

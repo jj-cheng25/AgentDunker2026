@@ -11,10 +11,12 @@ changes: no evidence, no swap.
 from __future__ import annotations
 
 import math
+import os
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 
-IOU_MIN = 0.2        # same-team boxes overlapping at least this much can be swapped by the tracker
+IOU_MIN = float(os.environ.get("ADK_ID_RELINK_IOU", 0.2))   # same-team boxes this close can be swapped
+GAP_X = float(os.environ.get("ADK_ID_RELINK_GAP", 0.0))     # also: feet within GAP_X box widths (0 = off)
 MIN_WEIGHT = 2       # a number needs this much read weight on one side to count (one agreed crop = 3)
 MARGIN = 2           # a swap must remove at least this much contradicted weight
 
@@ -44,6 +46,12 @@ def _iou(a, b) -> float:
     return inter / ((a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - inter)
 
 
+def _near(a, b, k: float) -> bool:
+    """Foot points (bottom centres) within k mean box widths: a hand-over through occlusion, no overlap."""
+    w = ((a[2] - a[0]) + (b[2] - b[0])) / 2
+    return math.hypot((a[0] + a[2]) / 2 - (b[0] + b[2]) / 2, a[3] - b[3]) <= k * w
+
+
 def crossings(players: list[dict], fps: float, iou_min: float = IOU_MIN) -> list[dict]:
     """Same-team box overlaps: one event per contiguous run per pair, at the frame of highest IoU."""
     by_f = defaultdict(list)
@@ -60,7 +68,7 @@ def crossings(players: list[dict], fps: float, iou_min: float = IOU_MIN) -> list
                 if ga is None or ga != gb:
                     continue
                 v = _iou(ba, bb)
-                if v < iou_min:
+                if v < iou_min and not (GAP_X and _near(ba, bb, GAP_X)):
                     continue
                 r = runs[(min(ta, tb), max(ta, tb))]
                 if r and f - r[-1][1] <= gap:

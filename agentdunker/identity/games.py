@@ -27,9 +27,10 @@ def secs(clock: str | None) -> float | None:
     m = re.match(r"PT(\d+)M([\d.]+)S", clock)
     if m:
         return int(m.group(1)) * 60 + float(m.group(2))
-    m = re.match(r"^\s*(\d{1,2}):(\d{2}(?:\.\d+)?)\s*$", clock)
+    # "4:54", and under a minute the broadcast ":53.6" (no minutes: a whole score-bug sequence was lost)
+    m = re.match(r"^\s*(\d{0,2}):(\d{2}(?:\.\d+)?)\s*$", clock)
     if m:
-        return int(m.group(1)) * 60 + float(m.group(2))
+        return int(m.group(1) or 0) * 60 + float(m.group(2))
     m = re.match(r"^\s*(\d{1,2}(?:\.\d+)?)\s*$", clock)     # "45.3" under a minute
     return float(m.group(1)) if m else None
 

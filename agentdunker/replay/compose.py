@@ -37,7 +37,10 @@ def sample_timeline(knots: list, t: float) -> float:
         return knots[0][1]
     for (a0, a1), (b0, b1) in zip(knots, knots[1:]):
         if t <= b0:
-            return a1 + (b1 - a1) * (t - a0) / (b0 - a0)
+            v = a1 + (b1 - a1) * (t - a0) / (b0 - a0)
+            # inside the segment, never past its ends: 3.2000000000000006 > duration 3.2 made the renderer
+            # reject a frame and the whole 3D replay was dropped (2026-11-19, held-out h22)
+            return min(max(v, min(a1, b1)), max(a1, b1))
     return knots[-1][1]
 
 

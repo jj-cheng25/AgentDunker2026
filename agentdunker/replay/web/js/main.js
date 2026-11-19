@@ -372,7 +372,9 @@ setCamera(play.camera ?? 'broadcast');
 // Movie export is silent. The parent editor owns narration and the final audio clock.
 // renderAt(t) is a pure absolute-time frame API, including a repeatable camera orbit.
 window.holo.renderAt = async (t, options = {}) => {
-  if (!Number.isFinite(t) || t < 0 || t > play.duration) throw new Error('Invalid frame time');
+  // float noise at the window ends is not an invalid time (3.2000000000000006 vs duration 3.2)
+  if (!Number.isFinite(t) || t < -1e-6 || t > play.duration + 1e-6) throw new Error('Invalid frame time');
+  t = Math.min(Math.max(t, 0), play.duration);
   camTween = null; controls.autoRotate = false;
   state.playing = false; state.notes = options.notes !== false; state.badges = options.badges !== false;
   shared.uTime.value = t;

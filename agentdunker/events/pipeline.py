@@ -13,7 +13,7 @@ from . import made as made_mod
 from .actions import action_windows, court_paths, drives, jump_windows, screens
 from .balltrack import drop_static_near_rim, link_ball, rim_at, rims
 from .court import Court, is_three, nearest_rim
-from .official import defence_never_had_ball, match_shot
+from .official import clock_secs, defence_never_had_ball, match_shot
 from .possession import Segment, ambiguous_frames, ball_states, holders
 from .release import Release, find_release
 from .release_pose import PoseCache, hand_offs, people_near_ball, reaches_rim, shooter_of
@@ -158,9 +158,12 @@ def _main_shot(attempts, info, video, rim_by_f, tracks, court, identity, use_vlm
              "points": None, "shot_court_xy": None, "shot_distance_ft": None, "shot_type": None, "shot_type_conf": 0.0,
              "made_t": None, "bank_t": None, "rim_t": None, "rim_img": [], "release_f": None, "made_conf": 0.0, "made_source": None, "official": None}
     if not attempts:
-        return empty, None
-    # the clip's highlighted shot: the last attempt (a putback after a miss ends the possession)
-    a = attempts[-1]
+        return _official_only(identity, tracks, info) or empty, None
+    # the clip's highlighted shot: the last attempt (a putback after a miss ends the possession), but a missed
+    # touch after the ball already reached the rim in the same visit is a tip at the rebound, not the shot
+    # (c04: Dunn's corner three at 7.6 s lost to a hand near the rim at 8.45 s with no shooter)
+    proper = [x for x in attempts if x["release"].f <= x["visit"].f_first or x["made"].get("made")]
+    a = (proper or attempts)[-1]
     rel, v, judged = a["release"], a["visit"], a["made"]
     fps = info.fps
     made, made_conf, source = judged.get("made"), judged.get("conf", 0.0), "ball_path"
@@ -214,6 +217,35 @@ def _main_shot(attempts, info, video, rim_by_f, tracks, court, identity, use_vlm
                 doc["made"], doc["made_source"], doc["made_conf"] = off["made"], "official_pbp", off["conf"]
             doc["points"] = off.get("points") or doc["points"]
     return doc, a
+
+
+def _official_only(identity: dict | None, tracks: Tracks, info) -> dict | None:
+    """The clip's shot from the play-by-play alone, when the video found no attempt (h21 held-out: a cutting
+    dunk, too short a flight for the ball path). Only for a firm match whose window holds exactly one field goal
+    and a single track named as its shooter; the release time maps the PBP clock onto the score-bug reads."""
+    off = match_shot(identity, None, None)
+    if not off or off["match"].get("n_candidates") != 1 or off.get("conf", 0) < 0.9 or not off.get("person_id"):
+        return None
+    players = (identity or {}).get("players") or {}
+    hits = [int(t) for t, p in players.items()
+            if str(p.get("person_id")) == str(off["person_id"]) and p.get("team_abbr") == off.get("team")]
+    shot_c = clock_secs(off.get("clock"))
+    gm = (identity or {}).get("game_match") or {}
+    reads = sorted((r["t"], r["clock_s"]) for r in (identity or {}).get("scoreboard") or []
+                   if r.get("clock_s") is not None and r.get("t") is not None and r.get("period") in (None, gm.get("period")))
+    if len(hits) != 1 or shot_c is None or not reads:
+        return None
+    before = [(t, c) for t, c in reads if c >= shot_c]          # reads before the shot (clock runs down)
+    t0, c0 = before[-1] if before else reads[0]
+    release_t = min(max(0.0, t0 + (c0 - shot_c)), info.t(info.n_frames - 1))
+    f = info.f(release_t)
+    logger.info("shot from PBP only: %s at %.2f s (track %s)", off.get("description"), release_t, hits[0])
+    return {"release_t": release_t, "release_f": round(float(f), 1), "shooter_track": hits[0], "made": off["made"],
+            "made_conf": off["conf"], "made_source": "official_pbp", "conf": 0.5, "points": off.get("points"),
+            "shot_court_xy": None, "shot_distance_ft": off.get("shot_distance_ft"), "ball_path_img": [], "rim_t": None,
+            "made_t": None, "bank_t": None, "rim_img": [], "shot_type": None, "shot_type_conf": 0.0,
+            "xfg": off.get("xfg"), "official": off,
+            "evidence": {"release": {"method": "official_pbp_only", "clock": off.get("clock"), "read": [t0, c0]}}}
 
 
 def _possession_gate(identity: dict | None, shot: dict, tracks: Tracks) -> tuple[str, float] | None:

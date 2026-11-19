@@ -9,6 +9,7 @@ import hashlib
 import json
 import logging
 import os
+import random
 import threading
 import time
 from pathlib import Path
@@ -44,22 +45,42 @@ def _key(env: str, path: str) -> str:
     return value
 
 
+LIMIT_RETRIES = 12      # HTTP 429: exponential backoff with jitter, ~10 min in all (several clips at once)
+
+
+def _retry_after(r: requests.Response) -> float | None:
+    try:
+        v = float(r.headers.get("Retry-After", ""))
+    except (TypeError, ValueError):
+        return None
+    return v if 0 < v <= 120 else None
+
+
 def _post(url: str, key_env: str, key_path: str, retries: int = 7, timeout: int = 180, **kw) -> requests.Response:
+    """POST with retries. Errors: `retries` tries, linear backoff. HTTP 429 (rate limit) is counted apart: the
+    server's Retry-After, else 4 * 2^n s capped at 60, with +-50 % jitter so clips run side by side do not
+    retry in step (2026-11-19: 3 of 12 held-out clips lost their commentary after the old 112 s budget)."""
     last = None
     gate = _MOSS_SLOTS if url.startswith(MOSS_API) else threading.BoundedSemaphore(1)
-    for attempt in range(retries):
-        limited = False
+    errors = limits = 0
+    while errors < retries and limits < LIMIT_RETRIES:
+        r = None
         try:
             with gate:
                 r = _providers.moss_or_llm_post(url, key_env, timeout=timeout, **kw)
             if r.status_code == 200:
                 return r
-            limited = r.status_code == 429
             last = f"HTTP {r.status_code}: {r.text[:120]}"
         except requests.RequestException as exc:
             last = type(exc).__name__
         logger.warning("retry %s (%s)", url.rsplit("/", 1)[-1], last.strip())
-        time.sleep((4 + 4 * attempt) if limited else (2 + 3 * attempt))
+        if r is not None and r.status_code == 429:
+            delay = _retry_after(r) or min(60.0, 4.0 * 2 ** limits) * (0.5 + random.random())
+            limits += 1
+        else:
+            delay = 2 + 3 * errors
+            errors += 1
+        time.sleep(delay)
     raise RuntimeError(f"request failed: {url} ({last})")
 
 
