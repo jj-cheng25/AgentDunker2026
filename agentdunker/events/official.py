@@ -94,6 +94,44 @@ def xfg_for(gid: str, person_id: int | str, action_number: int) -> float | None:
     return None
 
 
+START_PAD_S = 2.0     # the first score-bug read comes a second or two after the clip starts
+
+
+def defence_never_had_ball(identity: dict | None, off: dict | None, offense_tri: str | None,
+                           defence_tri: str | None) -> bool:
+    """True when the play-by-play of a firmly matched game shows no change of possession to the defence
+    between the clip's first score-bug clock and the shot: no field goal, free throw, rebound, steal or jump
+    ball of the defence and no turnover of the offence. Ball contacts by defenders before the release are then
+    tracker/holder noise, not possessions (c03 original: three DAL passes, a DAL drive and a DAL "shot" inside
+    a HOU half-court set)."""
+    if not off or not offense_tri or not defence_tri or off.get("conf", 0) < 0.9:
+        return False
+    gm = (identity or {}).get("game_match") or {}
+    shot_c = clock_secs(off.get("clock"))
+    # game clock at the clip start: each score-bug read pushed back by its clip time (as if the clock ran; a
+    # stopped clock only widens the window, i.e. makes the check stricter)
+    starts = [r["clock_s"] + r["t"] for r in (identity or {}).get("scoreboard") or []
+              if r.get("clock_s") is not None and r.get("t") is not None and r.get("period") in (None, gm.get("period"))]
+    starts += [c for c in (clock_secs(x) for x in (gm.get("clock") or [])) if c is not None]
+    if shot_c is None or not starts or gm.get("game_id") != off.get("game_id"):
+        return False
+    hi = max(starts) + START_PAD_S
+    for a in _actions(off["game_id"]):
+        if a.get("period") != gm.get("period") or a.get("actionNumber") == off.get("action_number"):
+            continue
+        c = clock_secs(a.get("clock"))
+        if c is None or not (shot_c <= c <= hi):
+            continue
+        kind, tri = a.get("actionType"), a.get("teamTricode")
+        # the defence had the ball: its own shot, rebound or turnover; the offence's steal or block; the
+        # offence gave it away: its turnover; a jump ball: contested either way (c06: LAL turnover, GSW steal)
+        if tri == defence_tri and kind in ("2pt", "3pt", "freethrow", "rebound", "turnover", "jumpball"):
+            return False
+        if tri == offense_tri and kind in ("turnover", "steal", "block", "jumpball"):
+            return False
+    return True
+
+
 def _name_key(name: str | None) -> str:
     return re.sub(r"[^a-z]", "", (name or "").split()[-1].lower()) if name else ""
 

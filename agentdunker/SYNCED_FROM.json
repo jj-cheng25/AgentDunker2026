@@ -181,9 +181,9 @@
    "module": "m5",
    "branch_worktree": "adk-cmd-m5",
    "source_package": "adk_events",
-   "commit": "23274c0749a16a73f3ad9bf63927e639cfdc94e1",
+   "commit": "2939450f87a38b8483a258b02e1b1094201ee082",
    "files": 22,
-   "tree_sha256": "25b55dd95c6bf301",
+   "tree_sha256": "e62deda1fe8ddf06",
    "rules": [
     {
      "file": "official.py",

@@ -13,7 +13,7 @@ from . import made as made_mod
 from .actions import action_windows, court_paths, drives, jump_windows, screens
 from .balltrack import drop_static_near_rim, link_ball, rim_at, rims
 from .court import Court, is_three, nearest_rim
-from .official import match_shot
+from .official import defence_never_had_ball, match_shot
 from .possession import Segment, ambiguous_frames, ball_states, holders
 from .release import Release, find_release
 from .release_pose import PoseCache, hand_offs, people_near_ball, reaches_rim, shooter_of
@@ -97,6 +97,16 @@ def run(video: str, tracks_path: str | None, court_path: str | None = None, iden
             attempts.append({"visit": v, "release": rel, "ball": ball, "made": res, "dets": cache.data})
     shot_doc, shot_att = _main_shot(attempts, info, video, rim_by_f, tracks, court, identity, use_vlm)
 
+    # 2b. the official record says who had the ball: with no possession change to the defence between the clip
+    # start and the shot, defenders' "shots" and holds before the release are holder noise (matched games only)
+    gate = _possession_gate(identity, shot_doc, tracks)
+    if gate:
+        de, gate_f = gate
+        kept = [a for a in attempts if a is shot_att or a["release"].f >= gate_f
+                or tracks.team_of(a["release"].shooter_track) != de]
+        gate = {"defence": de, "until_t": shot_doc["release_t"], "dropped_attempts": len(attempts) - len(kept)}
+        attempts = kept
+
     # 3. ball state timeline + per-track actions (10 Hz)
     shots = [{"f_release": a["release"].f, "f_end": int(a["made"].get("f_cross") or a["visit"].f_last) + int(0.3 * fps),
               "shooter": a["release"].shooter_track, "conf": a["release"].conf} for a in attempts]
@@ -110,6 +120,9 @@ def run(video: str, tracks_path: str | None, court_path: str | None = None, iden
             people = people_near_ball(video, ball10, amb, pose_cache, pose)
     obs = holders(ball10, sparse, tracks, sparse_frames, people)
     segs = ball_states(obs, tracks, fps, n, shots)
+    if gate:
+        segs, gate["stripped_segments"] = _strip_defence(segs, tracks, gate["defence"], shot_doc["release_f"])
+        logger.info("possession check (official PBP): %s", gate)
     paths = court_paths(tracks, court, sparse_frames) if court else {}
     jumps = jump_windows(cache.data, tracks, fps)
     scr = screens(segs, paths, tracks, fps, sparse_frames) if paths else []
@@ -133,6 +146,7 @@ def run(video: str, tracks_path: str | None, court_path: str | None = None, iden
         "attempts": [{"release_t": info.t(a["release"].f), "shooter_track": a["release"].shooter_track,
                       "made": a["made"].get("made"), "conf": a["release"].conf,
                       "rim_t": info.t(a["visit"].f_first)} for a in attempts],
+        "possession_check": gate or None,
         "meta": {"detector": "ortizeg/basketball-deim-m-640 (Apache-2.0)", "pose": "yolo11x-pose (AGPL-3.0)" if use_pose else None,
                  "vlm_model": made_mod.vlm.MODEL if use_vlm else None,
                  "inputs": {"tracks": tracks_path, "court": court_path, "identity": identity_path}},
@@ -200,6 +214,36 @@ def _main_shot(attempts, info, video, rim_by_f, tracks, court, identity, use_vlm
                 doc["made"], doc["made_source"], doc["made_conf"] = off["made"], "official_pbp", off["conf"]
             doc["points"] = off.get("points") or doc["points"]
     return doc, a
+
+
+def _possession_gate(identity: dict | None, shot: dict, tracks: Tracks) -> tuple[str, float] | None:
+    """(defence team label, release frame) when the official record leaves the ball with the offence from the
+    clip start to the shot; None without a firm match or when the defence had the ball in between."""
+    off, shooter = shot.get("official"), shot.get("shooter_track")
+    if not off or shooter is None or shot.get("release_f") is None:
+        return None
+    if not (off["match"].get("name") or (shot.get("evidence") or {}).get("shooter_override")):
+        return None
+    o = tracks.team_of(shooter)
+    d = {"A": "B", "B": "A"}.get(o or "")
+    teams = (identity or {}).get("teams") or {}
+    tri = lambda g: (teams.get(g) or {}).get("abbr")  # noqa: E731
+    if not d or tri(o) != off.get("team"):
+        return None
+    return (d, float(shot["release_f"])) if defence_never_had_ball(identity, off, tri(o), tri(d)) else None
+
+
+def _strip_defence(segs: list[Segment], tracks: Tracks, defence: str, f_release: float) -> tuple[list[Segment], int]:
+    """Before the release, holds/dribbles of a defender and passes touching one become loose ball."""
+    out, n = [], 0
+    for s in segs:
+        people = [s.holder] if s.type in ("hold", "dribble") else [s.frm, s.to] if s.type == "pass" else []
+        if s.f0 < f_release and any(p is not None and tracks.team_of(p) == defence for p in people):
+            out.append(Segment("loose", s.f0, s.f1, conf=0.3, extra={"was": s.type, "why": "official: no defence possession"}))
+            n += 1
+        else:
+            out.append(s)
+    return out, n
 
 
 def official_shooter_track(identity: dict | None, off: dict | None, shooter: int | None) -> int | None:
