@@ -54,11 +54,41 @@ def _actions(gid: str) -> list[dict]:
     return d
 
 
-def xfg_for(gid: str, person_id: int | str, action_number: int) -> float | None:
+GPSHOT_URL = "https://api.nba.cn/nba-web/api/web/inside/gpShot"
+GPSHOT_CACHE = Path(os.environ.get("ADK_NBA_CN_CACHE", Path.home() / ".cache" / "agentdunker.events" / "nba_cn"))
+
+
+def _gpshot(gid: str, person_id: int | str, timeout: float = 15.0) -> dict | None:
+    """The player's per-shot NBA China data for one game: the local data root first, then one live request to
+    api.nba.cn (the endpoint agentdunker.identity already uses for Chinese names), cached; never in offline mode.
+    The local `gpshot/` copy covers ~350 games; the live lookup covers every game the endpoint serves."""
     p = DATA / "gpshot" / gid / f"{person_id}.json"
-    if not p.exists():
+    if p.exists():
+        return json.loads(p.read_text())
+    cached = GPSHOT_CACHE / gid / f"{person_id}.json"
+    if cached.exists():
+        return json.loads(cached.read_text())
+    if os.environ.get("ADK_OFFLINE") == "1":
         return None
-    for s in json.loads(p.read_text()).get("data", {}).get("shotList", []):
+    try:
+        import requests
+
+        r = requests.get(GPSHOT_URL, params={"gameId": gid, "playerId": person_id}, timeout=timeout)
+        r.raise_for_status()
+        body = r.json() or {}
+    except Exception as e:  # noqa: BLE001  (no network, bad JSON: no xFG, never an error)
+        logger.warning("nba.cn gpShot %s/%s: %s", gid, person_id, type(e).__name__)
+        return None
+    if not (body.get("data") or {}).get("shotList"):
+        return None
+    cached.parent.mkdir(parents=True, exist_ok=True)
+    cached.write_text(json.dumps(body, ensure_ascii=False))
+    return body
+
+
+def xfg_for(gid: str, person_id: int | str, action_number: int) -> float | None:
+    d = _gpshot(gid, person_id)
+    for s in ((d or {}).get("data") or {}).get("shotList") or []:
         if int(s.get("eventId", -1)) == int(action_number):
             return float(s["value"]) if s.get("value") is not None else None
     return None

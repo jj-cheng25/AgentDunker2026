@@ -36,11 +36,11 @@ DEFAULT_BASE = REPO.parent   # $B: the module worktrees adk-cmd-m1 … adk-cmd-m
 MODULES = {
     "m1": ("adk-cmd-m1", "4f7005f", "adk_tracking", "tracking"),
     "m2": ("adk-cmd-m2", "85772b7", "adk_court", "court"),
-    "m3": ("adk-cmd-m3", "447097e", "adk_identity", "identity"),
+    "m3": ("adk-cmd-m3", "7d9722a", "adk_identity", "identity"),
     "m4": ("adk-cmd-m4", "645317a", "adk_replay", "replay"),
-    "m5": ("adk-cmd-m5", "e98e145", "adk_events", "events"),
+    "m5": ("adk-cmd-m5", "23274c0", "adk_events", "events"),
     "m6": ("adk-cmd-m6", "dc2fdba", "adk_narration", "narration"),
-    "m7": ("adk-cmd-m7", "3b8bc01", "agentdunker", "film"),
+    "m7": ("adk-cmd-m7", "a1b190a", "agentdunker", "film"),
 }
 
 # Development / benchmark helpers that read the private bench ($CMD) or are not used by the film.

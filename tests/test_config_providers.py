@@ -98,3 +98,17 @@ def test_narration_transport_split(monkeypatch):
     assert calls == [("llm", "chat/completions")]
     with pytest.raises(RuntimeError):            # no MOSS key: the narration module falls back
         providers.moss_or_llm_post("https://api.mosi.cn/v1/audio/speech", "MOSS_API_KEY", json={})
+
+
+def test_apply_keeps_opencv_threads_after_ultralytics():
+    """2026-11-19: importing Ultralytics sets cv2.setNumThreads(0); OpenCV 5 then dies with SIGFPE in a resize
+    running on the court thread. apply() imports it first and restores the pool before any stage starts."""
+    cv2 = pytest.importorskip("cv2")
+    config.override(run={"threads": 3})
+    config.apply()
+    assert cv2.getNumThreads() == 3
+    try:
+        import ultralytics  # noqa: F401  (already imported by apply: no second setNumThreads(0))
+    except ImportError:
+        pass
+    assert cv2.getNumThreads() == 3

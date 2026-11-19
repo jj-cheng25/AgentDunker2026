@@ -54,6 +54,7 @@ class Run:
         self.out = Path(out).resolve()
         self.work = self.out / "work"
         self.work.mkdir(parents=True, exist_ok=True)
+        self.tracks_path = self.work / "tracks.json"    # tracks_linked.json once M3 relinked a tracker swap
         self.reuse, self.use_llm, self.use_moss_vl, self.skip = reuse, use_llm, use_moss_vl, set(skip)
         self.mods: dict[str, ModuleResult] = {}
         self.timing: dict[str, float] = {}
@@ -112,9 +113,17 @@ class Run:
             tracks, court = ft.result(), fc.result()
         identity = events = None
         if tracks:
-            identity = self.module("identity", "m3", [v, "--tracks", w / "tracks.json"], [w / "tracks.json"], 2400)
-            args = [v, "--tracks", w / "tracks.json", "--cache", w / "m5_cache"]
-            ins = [w / "tracks.json"]
+            linked = w / "tracks_linked.json"
+            id_args = [v, "--tracks", w / "tracks.json"] + (["--tracks-out", linked] if _m3_supports("--tracks-out") else [])
+            identity = self.module("identity", "m3", id_args, [w / "tracks.json"], 2400)
+            if identity and identity.get("relinks") and linked.exists():
+                # M3 swapped the tails of team-mates' tracks where the jersey reads showed a tracker swap: the
+                # names fit those tracks, so events, replay and nameplates all use them.
+                tracks, self.tracks_path = _load(linked), linked
+                self.notes.append(f"tracks relinked by identity: {len(identity['relinks'])} swap(s) "
+                                  f"at {[s['t'] for s in identity['relinks']]} s")
+            args = [v, "--tracks", self.tracks_path, "--cache", w / "m5_cache"]
+            ins = [self.tracks_path]
             for name, flag in (("court", "--court"), ("identity", "--identity")):
                 if (w / f"{name}.json").exists() and (court if name == "court" else identity):
                     args += [flag, w / f"{name}.json"]
@@ -170,7 +179,7 @@ class Run:
         out = self.work / "replay" / "replay.mp4"
         out.parent.mkdir(exist_ok=True)
         w0, w1 = rep["source"]
-        args = [self.video, "--tracks", self.work / "tracks.json", "--court", self.work / "court.json",
+        args = [self.video, "--tracks", self.tracks_path, "--court", self.work / "court.json",
                 "--events", ev_path, "--workers", "3"]
         if use_timeline:      # M4 renders the director's audio-first pacing directly (no frame resampling)
             tl = _dump(self.work / "timeline_m4.json", {"timeline": rep["time_map"]})
@@ -192,7 +201,7 @@ class Run:
                 self.notes.append(f"{len(annos)} 3D annotations prepared (work/annotations_m4.json); M4 has no --annotations option yet")
         bin_dir = promo.chromium_path_dir(self.work)      # M4 looks for `chromium` on PATH
         env = {"PATH": f"{bin_dir}:{os.environ.get('PATH', '')}"} if bin_dir else None
-        res = run_module("replay", "m4", [*args, "-o", out], out, self.work, inputs=[ev_path, self.work / "tracks.json"],
+        res = run_module("replay", "m4", [*args, "-o", out], out, self.work, inputs=[ev_path, self.tracks_path],
                          timeout=3600, env=env)
         self.mods["replay"] = res
         rj = _load(out.with_name("replay.json")) if res.ok else None
@@ -375,6 +384,16 @@ def _m4_supports(flag: str) -> bool:
     from .modules import module_dir, module_python
     try:
         out = subprocess.run([module_python("m4"), "-m", "agentdunker.replay", "--help"], cwd=module_dir("m4"),
+                             capture_output=True, text=True, timeout=120).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return flag in out
+
+
+def _m3_supports(flag: str) -> bool:
+    from .modules import module_dir, module_python
+    try:
+        out = subprocess.run([module_python("m3"), "-m", "agentdunker.identity", "--help"], cwd=module_dir("m3"),
                              capture_output=True, text=True, timeout=120).stdout
     except (OSError, subprocess.TimeoutExpired):
         return False

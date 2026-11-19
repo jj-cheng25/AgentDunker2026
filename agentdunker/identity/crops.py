@@ -104,12 +104,38 @@ def _spread(cands: list[Crop], k: int, min_dt: float, key) -> list[Crop]:
     return picked
 
 
+def _cover(cands: list[Crop], k: int, min_dt: float, key) -> list[Crop]:
+    """K crops over the track's whole time span: the best of each of k equal time bins first, then the best
+    of the rest. Ranking alone put every crop of a track into the scrum under the rim after the shot (big,
+    isolated boxes), so a tracker swap there named the whole track (2026-11-19, hackathon originals)."""
+    if len(cands) <= k:
+        return list(cands)
+    t0, t1 = min(c.t for c in cands), max(c.t for c in cands)
+    w = (t1 - t0) / k
+    picked: list[Crop] = []
+    if w > 0:
+        for i in range(k):
+            lo, hi = t0 + i * w, (t0 + (i + 1) * w) if i < k - 1 else t1 + 1e-9
+            for c in sorted((c for c in cands if lo <= c.t < hi), key=key, reverse=True):
+                if all(abs(c.t - p.t) >= min_dt for p in picked):
+                    picked.append(c)
+                    break
+    rest = _spread([c for c in cands if c not in picked], k, min_dt, key)
+    for c in rest:
+        if len(picked) >= k:
+            break
+        if all(abs(c.t - p.t) >= min_dt for p in picked):
+            picked.append(c)
+    return picked
+
+
 def select_crops(video: str, tracks: list[dict], width: int, height: int, fps: float,
-                 k: int = 8, pre: int = 30) -> dict[int, list[Crop]]:
+                 k: int = 8, pre: int = 30, cover: bool = True) -> dict[int, list[Crop]]:
     """K crops per player track: geometry pre-selection, then decode and re-rank by sharpness."""
     step = max(1, round(fps / 10))
     cands = candidates(tracks, width, height, step)
-    pre_sel = {tid: _spread(cs, pre, 0.1, key=lambda c: c.score) for tid, cs in cands.items()}
+    pick = _cover if cover else _spread
+    pre_sel = {tid: pick(cs, pre, 0.1, key=lambda c: c.score) for tid, cs in cands.items()}
     need = defaultdict(list)
     for cs in pre_sel.values():
         for c in cs:
@@ -132,7 +158,7 @@ def select_crops(video: str, tracks: list[dict], width: int, height: int, fps: f
         if not cs:
             continue
         ref = np.median([c.sharp for c in cs]) or 1.0
-        final = _spread(cs, k, 0.4, key=lambda c: c.score * min(1.5, c.sharp / ref))
+        final = pick(cs, k, 0.4, key=lambda c: c.score * min(1.5, c.sharp / ref))
         out[tid] = sorted(final, key=lambda c: c.f)
     return out
 

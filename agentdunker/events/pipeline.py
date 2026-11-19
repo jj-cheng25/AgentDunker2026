@@ -164,16 +164,24 @@ def _main_shot(attempts, info, video, rim_by_f, tracks, court, identity, use_vlm
     f_end = int(judged.get("f_cross") or v.f_last) + int(0.5 * fps)
     path = [[info.t(f), round(b.xy[0], 1), round(b.xy[1], 1)] for f, b in sorted(a["ball"].items())
             if rel.f - 1 <= f <= f_end]
+    off = match_shot(identity, rel.shooter_track, made)
+    shooter, override = rel.shooter_track, None
+    alt = official_shooter_track(identity, off, shooter)
+    if alt is not None:
+        override = {"from": shooter, "to": alt, "by": "official_pbp", "player": off.get("player")}
+        logger.info("shooter: track %s -> %s (the only field goal in the clip window is %s's)", shooter, alt,
+                    off.get("player"))
+        shooter = rel.shooter_track = alt      # the attempt list, shot events and actions follow
     points, shot_xy, shot_dist = None, None, None
-    if court and rel.shooter_track is not None:
-        p = tracks.box(rel.shooter_track, int(round(rel.f - 0.3 * fps))) or tracks.box(rel.shooter_track, int(rel.f))
+    if court and shooter is not None:
+        p = tracks.box(shooter, int(round(rel.f - 0.3 * fps))) or tracks.box(shooter, int(rel.f))
         xy = court.to_court(int(rel.f), p.foot) if (p and p.foot) else None
         points = (3 if is_three(xy) else 2) if xy else None
         if xy:
             rx, ry = nearest_rim(xy)
             shot_xy = [round(xy[0], 2), round(xy[1], 2)]
             shot_dist = round(float(((xy[0] - rx) ** 2 + (xy[1] - ry) ** 2) ** 0.5), 1)
-    doc = {**empty, "release_t": info.t(rel.f), "release_f": round(rel.f, 1), "shooter_track": rel.shooter_track,
+    doc = {**empty, "release_t": info.t(rel.f), "release_f": round(rel.f, 1), "shooter_track": shooter,
            "made": made, "made_conf": made_conf, "made_source": source, "conf": rel.conf, "points": points,
            "shot_court_xy": shot_xy, "shot_distance_ft": shot_dist,
            "ball_path_img": path, "rim_t": info.t(v.f_first),
@@ -181,16 +189,35 @@ def _main_shot(attempts, info, video, rim_by_f, tracks, court, identity, use_vlm
            "bank_t": info.t(judged["f_bank"]) if judged.get("f_bank") else None,
            "rim_img": _rim_path(rim_by_f, rel.f - 0.5 * fps, f_end + 0.5 * fps, info),
            "evidence": {"release": rel.evidence, "made": {k: judged.get(k) for k in ("rule", "crossings", "vlm")}}}
-    doc["shot_type"], doc["shot_type_conf"] = _shot_type(a["ball"], rel.f, fps, a.get("dets", {}), tracks, rel.shooter_track)
-    off = match_shot(identity, rel.shooter_track, made)
+    if override:
+        doc["evidence"]["shooter_override"] = override
+    doc["shot_type"], doc["shot_type_conf"] = _shot_type(a["ball"], rel.f, fps, a.get("dets", {}), tracks, shooter)
     if off:
         doc["official"] = off
         doc["xfg"] = off.get("xfg")
-        if off.get("conf", 0) >= 0.8 and off["match"].get("name"):
+        if off.get("conf", 0) >= 0.8 and (off["match"].get("name") or override):
             if made is None or made_conf < 0.8:
                 doc["made"], doc["made_source"], doc["made_conf"] = off["made"], "official_pbp", off["conf"]
             doc["points"] = off.get("points") or doc["points"]
     return doc, a
+
+
+def official_shooter_track(identity: dict | None, off: dict | None, shooter: int | None) -> int | None:
+    """The track of the PBP scorer when the official record pins the shot and the video picked someone else.
+
+    Only when the clip window holds exactly one field goal of a firmly matched game, the ball-path shooter's
+    name is not that player's, and exactly one track is named as that player on his team (2026-11-19 c08: a
+    defender under the ball was taken for the shooter of LeBron James's pull-up three)."""
+    if not off or off["match"].get("name") or off["match"].get("n_candidates") != 1 or off.get("conf", 0) < 0.9:
+        return None
+    if not off.get("person_id"):
+        return None
+    players = (identity or {}).get("players") or {}
+    hits = [int(tid) for tid, p in players.items()
+            if str(p.get("person_id")) == str(off["person_id"]) and p.get("team_abbr") == off.get("team")]
+    if len(hits) != 1 or hits[0] == shooter:
+        return None
+    return hits[0]
 
 
 def _shot_type(ball, f_rel: float, fps: float, dets: dict, tracks: Tracks, shooter: int | None) -> tuple[str | None, float]:

@@ -162,6 +162,7 @@ def apply() -> None:
         # answer caches (keyed by request hash: a re-run never pays twice)
         "ADK_CACHE": str(cache / "director"), "ADK_VLM_CACHE": str(cache / "vlm"),
         "ADK_ID_CACHE": str(cache / "identity"), "ADK_ID_INDEX": str(cache / "identity" / "pbp_compact.json.gz"),
+        "ADK_ID_ZH_CACHE": str(cache / "nba_cn" / "names"), "ADK_NBA_CN_CACHE": str(cache / "nba_cn" / "gpshot"),
         "PLAYWRIGHT_BROWSERS_PATH": os.environ.get("PLAYWRIGHT_BROWSERS_PATH", str(path("model_dir") / "ms-playwright")),
     }
     # Ultralytics: no online check, telemetry or Sentry in any mode (it contacted one.one.one.one and
@@ -182,6 +183,19 @@ def apply() -> None:
     try:                                   # torch may not be importable in a minimal environment
         import torch
         torch.set_num_threads(threads())
+    except Exception:  # noqa: BLE001
+        pass
+    # Ultralytics calls cv2.setNumThreads(0) when it is first imported, and OpenCV 5 dies with SIGFPE in a
+    # parallel loop running in another thread at that moment: tracking (imports it) and court calibration
+    # (resizes every frame) run side by side in-process, so a run could crash at random (11 of 24 held-out
+    # clips at 3 threads, 2026-11-19). Import it here, before any stage thread starts, then restore the pool.
+    try:
+        import ultralytics  # noqa: F401
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        import cv2
+        cv2.setNumThreads(threads())
     except Exception:  # noqa: BLE001
         pass
 

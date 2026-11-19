@@ -18,6 +18,7 @@ from . import games, vlm
 from .crops import select_crops
 from .jersey import ACCEPT_SHARE, Reading, read_tracks, reread_choices
 from .names_zh import TEAM_ZH, player_zh
+from .relink import from_tiles, relink, to_tiles
 from .scoreboard import read_scoreboard
 from .teams import name_teams
 
@@ -32,6 +33,8 @@ class IdentityConfig:
     deduce: bool = True           # last unread on-court jersey of a fully read team goes to its last track
     min_fit: float = 0.75         # share of read jerseys that must be on the floor for a game match
     max_state_share: float = 0.05 # score-bug state must fit at most this share of all local games
+    relink: bool = True           # swap same-team track tails at a crossing when the jersey reads say so
+    crop_cover: bool = True       # crops spread over each track's whole time span (not only the best moments)
 
 
 def _scoreboard_teams(sb: list[dict]) -> list[str]:
@@ -180,6 +183,13 @@ def _assign_numbers(players: list[dict], readings: dict[int, Reading], team_abbr
         if cfg.deduce and lu and len(lu) == 5 and len(tids) == 5:
             free = lu - {out[tid]["jersey"] for tid in tids}
             open_ = [tid for tid in tids if out[tid]["jersey"] is None]
+            # never against the track's own reads: a track that read another on-court number (lost to a
+            # team-mate in the assignment) is not the free player (c03 original: 13 read, 21 deduced)
+            own = readings.get(open_[0], Reading(open_[0])).support(lu)[0] if len(open_) == 1 else {}
+            if any(w >= 2 for n, (w, _) in own.items() if n not in free):
+                out[open_[0]]["rejected"] = "deduction skipped: own reads show " + ",".join(
+                    n for n, (w, _) in own.items() if w >= 2 and n not in free)
+                open_ = []
             if len(free) == 1 and len(open_) == 1:
                 # right exactly when the lineup and the other four numbers are (25/25 on the bench runs)
                 others = min(out[tid]["conf"] for tid in tids if tid != open_[0])
@@ -192,11 +202,12 @@ def identify_video(video: str, tracks: dict, cfg: IdentityConfig = IdentityConfi
     n_ledger = len(vlm.LEDGER)
     v = tracks["video"]
     fps, n_frames = float(v["fps"]), int(v["n_frames"])
-    players = [t for t in tracks["tracks"] if t.get("role") == "player" and t.get("team") in ("A", "B")]
+    # shallow copies: relinking replaces a player's "frames" list, the caller's tracks stay as they are
+    players = [dict(t) for t in tracks["tracks"] if t.get("role") == "player" and t.get("team") in ("A", "B")]
     groups = {g: [t["track_id"] for t in players if t["team"] == g] for g in ("A", "B")}
     timing = {}
 
-    crops = select_crops(video, players, v["width"], v["height"], fps, k=cfg.crops_per_track)
+    crops = select_crops(video, players, v["width"], v["height"], fps, k=cfg.crops_per_track, cover=cfg.crop_cover)
     timing["crops"] = round(time.time() - t0, 1)
     with ThreadPoolExecutor(2) as ex:
         f_sb = ex.submit(read_scoreboard, video, n_frames, fps)
@@ -205,6 +216,13 @@ def identify_video(video: str, tracks: dict, cfg: IdentityConfig = IdentityConfi
     if not sb:
         sb = read_scoreboard(video, n_frames, fps, frames=[int(n_frames * q) for q in (0.25, 0.4, 0.7)])
     timing["read"] = round(time.time() - t0, 1)
+    swaps = []
+    if cfg.relink:
+        tiles = to_tiles(crops, readings)
+        swaps = relink(players, tiles, fps)
+        if swaps:
+            crops, readings = from_tiles(tiles, readings)
+            logger.info("relinked %d swap(s): %s", len(swaps), [(s["t"], s["tracks"]) for s in swaps])
 
     teams = _scoreboard_teams(sb)
     views = {tid: rd.views for tid, rd in readings.items()}
@@ -260,6 +278,7 @@ def identify_video(video: str, tracks: dict, cfg: IdentityConfig = IdentityConfi
         "players": out_players,
         "teams": team_names,
         "game_match": game_match,
+        "relinks": swaps,       # apply with relink.apply_relinks(tracks, relinks) before using the names
         "scoreboard": sb,
         "meta": {"video": {k: v.get(k) for k in ("path", "sha256", "fps", "n_frames")},
                  "vlm_teams": vlm_map, "api": vlm.ledger_summary(vlm.LEDGER[n_ledger:]), "timing_s": timing},
