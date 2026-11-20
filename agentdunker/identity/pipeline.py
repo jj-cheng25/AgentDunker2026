@@ -286,7 +286,7 @@ def identify_video(video: str, tracks: dict, cfg: IdentityConfig = IdentityConfi
         "game_id": gm["game_id"], "status": gm["status"], "conf": gm["conf"],
         "period": Counter(periods).most_common(1)[0][0] if periods else 0,
         "clock": [clocks[0], clocks[-1]] if clocks else ["", ""],
-        **{k: gm[k] for k in ("home", "away", "date", "type", "state_share", "reason") if k in gm},
+        **{k: gm[k] for k in ("home", "away", "date", "type", "state_share", "reason", "banner") if k in gm},
         "candidates": gm.get("candidates", []),
     }
     timing["total"] = round(time.time() - t0, 1)

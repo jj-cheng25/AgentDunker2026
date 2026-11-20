@@ -36,7 +36,7 @@ DEFAULT_BASE = REPO.parent   # $B: the module worktrees adk-cmd-m1 … adk-cmd-m
 MODULES = {
     "m1": ("adk-cmd-m1", "4f7005f", "adk_tracking", "tracking"),
     "m2": ("adk-cmd-m2", "85772b7", "adk_court", "court"),
-    "m3": ("adk-cmd-m3", "2aa6c7a", "adk_identity", "identity"),
+    "m3": ("adk-cmd-m3", "4aacecf", "adk_identity", "identity"),
     "m4": ("adk-cmd-m4", "f54f495", "adk_replay", "replay"),
     "m5": ("adk-cmd-m5", "ce380a1", "adk_events", "events"),
     "m6": ("adk-cmd-m6", "e78bb69", "adk_narration", "narration"),

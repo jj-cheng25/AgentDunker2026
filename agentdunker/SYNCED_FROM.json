@@ -105,9 +105,9 @@
    "module": "m3",
    "branch_worktree": "adk-cmd-m3",
    "source_package": "adk_identity",
-   "commit": "2aa6c7a684a42262f69d867f5693c3a970078000",
+   "commit": "4aacecf62c3aa646ef07641bf0e4ac1287dcd4bd",
    "files": 13,
-   "tree_sha256": "87d18abb06bd25f3",
+   "tree_sha256": "b8ee8cd607ae3b1c",
    "rules": [
     {
      "file": "__main__.py",
