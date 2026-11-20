@@ -9,6 +9,7 @@ data exists, otherwise a normal plate.
 from __future__ import annotations
 
 import math
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -37,14 +38,23 @@ class Plate:
     boxes: dict = field(default_factory=dict)      # source frame -> smoothed bbox (observed or bridged)
 
 
+def latin(text: str) -> str:
+    """Latin letters the overlay fonts can draw: diacritics folded (h15 review: "Valančiūnas" showed as
+    "ValancMunas", h22 "Biberović" as "Biberovic'"). Text with CJK characters is returned unchanged."""
+    if not text or any("\u3400" <= ch <= "\u9fff" for ch in text):
+        return text
+    folded = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+    return folded or text
+
+
 def short_name(info: dict) -> str:
     zh = info.get("name_zh_short") or ""
     if zh:
-        return zh
+        return latin(zh)                    # NBA China gives some rookies a Latin surname ("Biberović")
     full = info.get("name_zh") or ""
     if full:
-        return full.split("·")[-1]
-    parts = [w for w in (info.get("name") or "").split() if w.rstrip(".").lower() not in ("jr", "sr", "ii", "iii", "iv")]
+        return latin(full.split("·")[-1])
+    parts = [w for w in latin(info.get("name") or "").split() if w.rstrip(".").lower() not in ("jr", "sr", "ii", "iii", "iv")]
     return parts[-1] if parts else ""
 
 

@@ -100,15 +100,10 @@ def xfg_for(gid: str, person_id: int | str, action_number: int) -> float | None:
 START_PAD_S = 2.0     # the first score-bug read comes a second or two after the clip starts
 
 
-def defence_never_had_ball(identity: dict | None, off: dict | None, offense_tri: str | None,
-                           defence_tri: str | None) -> bool:
-    """True when the play-by-play of a firmly matched game shows no change of possession to the defence
-    between the clip's first score-bug clock and the shot: no field goal, free throw, rebound, steal or jump
-    ball of the defence and no turnover of the offence. Ball contacts by defenders before the release are then
-    tracker/holder noise, not possessions (c03 original: three DAL passes, a DAL drive and a DAL "shot" inside
-    a HOU half-court set)."""
-    if not off or not offense_tri or not defence_tri or off.get("conf", 0) < 0.9:
-        return False
+def _clip_window(identity: dict | None, off: dict | None) -> tuple[float, float] | None:
+    """(shot clock, game clock at the clip start + pad) in seconds for a firmly matched shot, or None."""
+    if not off or off.get("conf", 0) < 0.9:
+        return None
     gm = (identity or {}).get("game_match") or {}
     shot_c = clock_secs(off.get("clock"))
     # game clock at the clip start: each score-bug read pushed back by its clip time (as if the clock ran; a
@@ -117,8 +112,66 @@ def defence_never_had_ball(identity: dict | None, off: dict | None, offense_tri:
               if r.get("clock_s") is not None and r.get("t") is not None and r.get("period") in (None, gm.get("period"))]
     starts += [c for c in (clock_secs(x) for x in (gm.get("clock") or [])) if c is not None]
     if shot_c is None or not starts or gm.get("game_id") != off.get("game_id"):
+        return None
+    return shot_c, max(starts) + START_PAD_S
+
+
+def clock_to_t(identity: dict | None, clock_s: float | None, t_max: float) -> float | None:
+    """Clip time of a game-clock value, from the nearest score-bug read before it (the clock runs down)."""
+    gm = (identity or {}).get("game_match") or {}
+    reads = sorted((r["t"], r["clock_s"]) for r in (identity or {}).get("scoreboard") or []
+                   if r.get("clock_s") is not None and r.get("t") is not None and r.get("period") in (None, gm.get("period")))
+    if clock_s is None or not reads:
+        return None
+    before = [(t, c) for t, c in reads if c >= clock_s]
+    t0, c0 = before[-1] if before else reads[0]
+    return min(max(0.0, t0 + (c0 - clock_s)), t_max)
+
+
+def possession_changes(identity: dict | None, off: dict | None) -> list[dict]:
+    """Steals and turnovers in the official record between the clip start and the shot (firm match only), in
+    game order, one entry per change of possession: {clock_s, kind: steal|turnover, stealer*, loser*}.
+    A steal and the turnover it causes share a clock value and are merged (c06: B. James lost ball, B. Podziemski
+    steal, then Curry's transition three)."""
+    w = _clip_window(identity, off)
+    if w is None:
+        return []
+    shot_c, hi = w
+    gm = (identity or {}).get("game_match") or {}
+    by_clock: dict[float, dict] = {}
+    for a in _actions(off["game_id"]):
+        c = clock_secs(a.get("clock"))
+        if a.get("period") != gm.get("period") or c is None or not (shot_c <= c <= hi):
+            continue
+        kind = a.get("actionType")
+        if kind not in ("steal", "turnover"):
+            continue
+        e = by_clock.setdefault(round(c, 1), {"clock_s": c})
+        role = "stealer" if kind == "steal" else "loser"
+        e.update({f"{role}_id": a.get("personId") or None, role: a.get("playerNameI"), f"{role}_team": a.get("teamTricode")})
+        if kind == "turnover":
+            e["turnover"] = a.get("subType")
+    out = []
+    for _, e in sorted(by_clock.items(), reverse=True):
+        e["kind"] = "steal" if e.get("stealer_team") else "turnover"
+        out.append(e)
+    return out
+
+
+def defence_never_had_ball(identity: dict | None, off: dict | None, offense_tri: str | None,
+                           defence_tri: str | None) -> bool:
+    """True when the play-by-play of a firmly matched game shows no change of possession to the defence
+    between the clip's first score-bug clock and the shot: no field goal, free throw, rebound, steal or jump
+    ball of the defence and no turnover of the offence. Ball contacts by defenders before the release are then
+    tracker/holder noise, not possessions (c03 original: three DAL passes, a DAL drive and a DAL "shot" inside
+    a HOU half-court set)."""
+    if not offense_tri or not defence_tri:
         return False
-    hi = max(starts) + START_PAD_S
+    w = _clip_window(identity, off)
+    if w is None:
+        return False
+    shot_c, hi = w
+    gm = (identity or {}).get("game_match") or {}
     for a in _actions(off["game_id"]):
         if a.get("period") != gm.get("period") or a.get("actionNumber") == off.get("action_number"):
             continue

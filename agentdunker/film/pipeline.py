@@ -132,11 +132,18 @@ class Run:
             events = self.module("events", "m5", args, ins, 2400)
             filled = director.official_shooter_fill(identity, events)
             if filled:
-                # M3's identity.json stays as written; M4, M6 and the nameplates read the filled copy
                 tid = str(events["shot"]["shooter_track"])
-                identity, self.identity_path = filled, _dump(w / "identity_film.json", filled)
+                identity = filled
                 self.notes.append(f"shooter track {tid} named from the play-by-play: "
                                   f"{filled['players'][tid]['name']} ({filled['players'][tid].get('name_zh')})")
+            zh = director.chinese_names_fill(identity)
+            if zh:
+                n = sum(p.get("name_zh_source") == "season_tables" for p in zh["players"].values())
+                identity = zh
+                self.notes.append(f"{n} Chinese name(s) from the NBA China season tables")
+            if filled or zh:
+                # M3's identity.json stays as written; M4, M6 and the nameplates read the filled copy
+                self.identity_path = _dump(w / "identity_film.json", identity)
         return {"tracks": tracks, "court": court, "identity": identity, "events": events}
 
     def narrate(self, edl: dict) -> Optional[dict]:

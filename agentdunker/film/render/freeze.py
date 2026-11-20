@@ -75,13 +75,18 @@ def make_card(name: str, team: str, xfg: Optional[float]) -> tuple[Image.Image, 
     c.polygon([(25, top), (394, top), (380, bottom), (11, bottom)], (23, 109, 154, 232))
     c.polygon([(25, top), (31, top), (17, bottom), (11, bottom)], (104, 225, 255, 255))
     nw, nh = c.measure(name, 34)
-    tw, th = c.measure(team, 28)
-    if 39 + nw + 24 > 367 - tw:                       # long team label: drop it rather than overlap
+    # a long team label shrinks (down to 20 px) before it is dropped (review: "西亚卡姆" lost "步行者 · 43号")
+    team_size = 28
+    tw, th = c.measure(team, team_size)
+    while team and 39 + nw + 24 > 367 - tw and team_size > 20:
+        team_size -= 1
+        tw, th = c.measure(team, team_size)
+    if 39 + nw + 24 > 367 - tw:                       # still too long: drop it rather than overlap
         team, tw = "", 0
     if name:
         c.text(name, 39, center - nh / 2, 34)
     if team:
-        c.text(team, 367 - tw, center - th / 2, 28, (209, 239, 249, 255))
+        c.text(team, 367 - tw, center - th / 2, team_size, (209, 239, 249, 255))
     if xfg is None:
         return c.finish(), (17, bottom)
     number = f"{xfg * 100:.1f}"

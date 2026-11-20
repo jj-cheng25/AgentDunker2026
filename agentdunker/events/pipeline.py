@@ -13,7 +13,7 @@ from . import made as made_mod
 from .actions import action_windows, court_paths, drives, jump_windows, screens
 from .balltrack import drop_static_near_rim, link_ball, rim_at, rims
 from .court import Court, is_three, nearest_rim
-from .official import clock_secs, defence_never_had_ball, match_shot
+from .official import clock_secs, clock_to_t, defence_never_had_ball, match_shot, possession_changes
 from .possession import Segment, ambiguous_frames, ball_states, holders
 from .release import Release, find_release
 from .release_pose import PoseCache, hand_offs, people_near_ball, reaches_rim, shooter_of
@@ -131,6 +131,7 @@ def run(video: str, tracks_path: str | None, court_path: str | None = None, iden
                                              "release_f": info.f(shot_doc["release_t"]) if shot_doc.get("release_t") is not None else None,
                                              "conf": shot_doc.get("conf", 0.5)}, fps)
     events = _events(segs, scr, drv, attempts, shot_att, tracks, info)
+    events = sorted(events + _official_changes(identity, shot_doc, segs, tracks, info), key=lambda e: e["t"])
 
     offense = _offense(segs, tracks, shot_doc)
     return {
@@ -238,15 +239,9 @@ def _official_only(identity: dict | None, tracks: Tracks, info) -> dict | None:
     players = (identity or {}).get("players") or {}
     hits = [int(t) for t, p in players.items()
             if str(p.get("person_id")) == str(off["person_id"]) and p.get("team_abbr") == off.get("team")]
-    shot_c = clock_secs(off.get("clock"))
-    gm = (identity or {}).get("game_match") or {}
-    reads = sorted((r["t"], r["clock_s"]) for r in (identity or {}).get("scoreboard") or []
-                   if r.get("clock_s") is not None and r.get("t") is not None and r.get("period") in (None, gm.get("period")))
-    if len(hits) != 1 or shot_c is None or not reads:
+    release_t = clock_to_t(identity, clock_secs(off.get("clock")), info.t(info.n_frames - 1))
+    if len(hits) != 1 or release_t is None:
         return None
-    before = [(t, c) for t, c in reads if c >= shot_c]          # reads before the shot (clock runs down)
-    t0, c0 = before[-1] if before else reads[0]
-    release_t = min(max(0.0, t0 + (c0 - shot_c)), info.t(info.n_frames - 1))
     f = info.f(release_t)
     logger.info("shot from PBP only: %s at %.2f s (track %s)", off.get("description"), release_t, hits[0])
     return {"release_t": release_t, "release_f": round(float(f), 1), "shooter_track": hits[0], "made": off["made"],
@@ -254,7 +249,7 @@ def _official_only(identity: dict | None, tracks: Tracks, info) -> dict | None:
             "shot_court_xy": None, "shot_distance_ft": off.get("shot_distance_ft"), "ball_path_img": [], "rim_t": None,
             "made_t": None, "bank_t": None, "rim_img": [], "shot_type": None, "shot_type_conf": 0.0,
             "xfg": off.get("xfg"), "official": off,
-            "evidence": {"release": {"method": "official_pbp_only", "clock": off.get("clock"), "read": [t0, c0]}}}
+            "evidence": {"release": {"method": "official_pbp_only", "clock": off.get("clock")}}}
 
 
 def _possession_gate(identity: dict | None, shot: dict, tracks: Tracks) -> tuple[str, float] | None:
@@ -263,7 +258,12 @@ def _possession_gate(identity: dict | None, shot: dict, tracks: Tracks) -> tuple
     off, shooter = shot.get("official"), shot.get("shooter_track")
     if not off or shooter is None or shot.get("release_f") is None:
         return None
-    if not (off["match"].get("name") or (shot.get("evidence") or {}).get("shooter_override")):
+    ev = shot.get("evidence") or {}
+    pinned = (off["match"].get("name") or ev.get("shooter_override")
+              or (ev.get("release") or {}).get("method") == "official_pbp_only")
+    if not pinned:
+        # h21 held-out: the dunk came from the PBP alone, so the check was skipped and the Lakers defenders next
+        # to the Rockets' ball handler were narrated as passing to each other
         return None
     o = tracks.team_of(shooter)
     d = {"A": "B", "B": "A"}.get(o or "")
@@ -272,6 +272,49 @@ def _possession_gate(identity: dict | None, shot: dict, tracks: Tracks) -> tuple
     if not d or tri(o) != off.get("team"):
         return None
     return (d, float(shot["release_f"])) if defence_never_had_ball(identity, off, tri(o), tri(d)) else None
+
+
+def _official_changes(identity: dict | None, shot: dict, segs: list[Segment], tracks: Tracks, info) -> list[dict]:
+    """Steals and turnovers of the official record as events (type "other", subtype steal|turnover).
+
+    The PBP clock is mapped onto the clip through the score-bug reads, then moved to the nearest ball-state change
+    of possession to the gaining team (within 3 s), where the video shows it. Without that, the commentary went
+    from one team's drive straight to the other team's pass (c06: B. James lost the ball, B. Podziemski stole it,
+    then Curry's transition three), as if the passer had handed it over."""
+    off = shot.get("official")
+    changes = possession_changes(identity, off)
+    if not changes:
+        return []
+    players = (identity or {}).get("players") or {}
+    teams = {g: (v or {}).get("abbr") for g, v in ((identity or {}).get("teams") or {}).items()}
+
+    def track_of(pid, tri):
+        hits = [int(t) for t, p in players.items()
+                if pid and str(p.get("person_id")) == str(pid) and p.get("team_abbr") == tri]
+        return hits[0] if len(hits) == 1 else None
+
+    held = [s for s in segs if s.type in ("hold", "dribble") and s.holder is not None]
+    out = []
+    for pc in changes:
+        t = clock_to_t(identity, pc["clock_s"], info.t(info.n_frames - 1))
+        if t is None:
+            continue
+        gain = pc.get("stealer_team") or next((x for x in teams.values() if x and x != pc.get("loser_team")), None)
+        best = None
+        for prev, s in zip(held, held[1:]):
+            a, b = teams.get(tracks.team_of(prev.holder)), teams.get(tracks.team_of(s.holder))
+            ts = info.t(s.f0)
+            if b == gain and a not in (None, gain) and abs(ts - t) <= 3.0 and (best is None or abs(ts - t) < abs(best - t)):
+                best = ts
+        st, lo = track_of(pc.get("stealer_id"), pc.get("stealer_team")), track_of(pc.get("loser_id"), pc.get("loser_team"))
+        out.append({"t": round(best if best is not None else t, 3), "type": "other", "subtype": pc["kind"],
+                    "actors": [x for x in (st if pc["kind"] == "steal" else lo,) if x is not None],
+                    "stealer_track": st, "loser_track": lo, "conf": 0.85 if best is not None else 0.7,
+                    "official": {k: pc.get(k) for k in ("clock_s", "stealer", "stealer_team", "loser", "loser_team",
+                                                        "turnover")}})
+        logger.info("official %s at %.2f s (%s): %s", pc["kind"], out[-1]["t"],
+                    "ball state" if best is not None else "clock only", out[-1]["official"])
+    return out
 
 
 def _strip_defence(segs: list[Segment], tracks: Tracks, defence: str, f_release: float) -> tuple[list[Segment], int]:

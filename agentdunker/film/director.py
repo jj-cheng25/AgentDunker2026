@@ -77,6 +77,22 @@ def official_shooter_fill(identity: Optional[dict], events: Optional[dict]) -> O
     return out
 
 
+def chinese_names_fill(identity: Optional[dict]) -> Optional[dict]:
+    """A copy of ``identity`` where players with a person id but no NBA China name get one from the season
+    tables (review h15: Jonas Valančiūnas had no Chinese name for that game and showed his English surname).
+    None when nothing changes."""
+    out = None
+    for tid, p in ((identity or {}).get("players") or {}).items():
+        if p.get("name_zh") or not p.get("person_id"):
+            continue
+        zh = season.zh_name(p["person_id"])
+        if not zh:
+            continue
+        out = out or copy.deepcopy(identity)
+        out["players"][tid].update(name_zh=zh["name_zh"], name_zh_short=zh["name_zh_short"], name_zh_source="season_tables")
+    return out
+
+
 def player_names(identity: Optional[dict]) -> dict[int, dict]:
     """track id → {short, full, jersey, team_abbr} for confident identities only."""
     out = {}
@@ -170,7 +186,7 @@ def _ball_holder(events: Optional[dict], t0: float, t1: float) -> Optional[int]:
 
 def split_phases(w0: float, w1: float, events: Optional[dict], facts: list) -> list[dict]:
     """Phase boundaries at measured facts (pass/screen/cut/drive/closeout/help), each 1.8–4 s, at most 5."""
-    order = {"drive": 0, "pass": 1, "screen": 2, "space": 3, "cut": 4, "closeout": 5, "help": 6}
+    order = {"steal": 0, "turnover": 0, "drive": 0, "pass": 1, "screen": 2, "space": 3, "cut": 4, "closeout": 5, "help": 6}
     cands = sorted([f for f in facts if w0 + MIN_PHASE_S <= f.t0 <= w1 - MIN_PHASE_S * 0.6],
                    key=lambda f: (order.get(f.type, 9), -f.conf))
     bounds = [w0, w1]
@@ -195,7 +211,7 @@ def split_phases(w0: float, w1: float, events: Optional[dict], facts: list) -> l
 
 
 FACT_TITLE = {"pass": "传球转移", "screen": "掩护配合", "cut": "无球切入", "drive": "持球突破",
-              "closeout": "防守扑出", "help": "协防收缩", "space": "空间展开"}
+              "closeout": "防守扑出", "help": "协防收缩", "space": "空间展开", "steal": "抢断反击", "turnover": "球权转换"}
 
 
 def template_title(ph: dict, names: dict, last: bool, shooter: Optional[int] = None, seen_drive: bool = False
@@ -204,7 +220,8 @@ def template_title(ph: dict, names: dict, last: bool, shooter: Optional[int] = N
     if not fs:
         holder = label(ph["holder"], names) if ph["holder"] is not None else "持球人"
         return ("准备出手" if last else "持球观察"), f"{holder}持球，队友保持站位。", []
-    key = next((f for t in ("drive", "pass", "screen", "space", "cut", "closeout", "help") for f in fs if f["type"] == t))
+    key = next((f for t in ("steal", "turnover", "drive", "pass", "screen", "space", "cut", "closeout", "help")
+                for f in fs if f["type"] == t))
     title = FACT_TITLE[key["type"]]
     if key["type"] == "pass" and key["actors"][1:] == [shooter]:
         title = "回传组织"
@@ -440,7 +457,7 @@ def narration_doc(edl: dict, events: Optional[dict], identity: Optional[dict], n
     for e in sorted((events or {}).get("events", []), key=lambda e: e["t"]):
         if float(e.get("conf") or 0) < EVENT_CONF or e["t"] >= live["source"][1]:
             continue
-        if e["type"] == "other" and not e.get("note"):
+        if e["type"] == "other" and not e.get("note") and e.get("subtype") not in ("steal", "turnover"):
             continue
         if shot and e["type"] != "shot" and e["t"] > shot["release_t"] + 0.2:
             continue
@@ -451,6 +468,14 @@ def narration_doc(edl: dict, events: Optional[dict], identity: Optional[dict], n
                 note += ", off the glass"
         elif e["type"] == "pass" and len(acts) >= 2:
             note = f"passes from {label(acts[0], names)} to {label(acts[1], names, 'teammate')}"
+        elif e.get("subtype") in ("steal", "turnover"):
+            # official play-by-play (M5): without it the commentary ran one team's drive into the other team's
+            # pass, as if the ball had been handed over (c06: Bronny James lost it, Podziemski stole it)
+            o = e.get("official") or {}
+            st = label(e.get("stealer_track"), names, o.get("stealer") or "a defender")
+            lo = label(e.get("loser_track"), names, o.get("loser") or "the ball handler")
+            note = (f"steal: {st} takes the ball away from {lo}; possession changes (official play-by-play)"
+                    if e["subtype"] == "steal" else f"turnover by {lo}; possession changes (official play-by-play)")
         else:
             note = EVENT_NOTE.get(e["type"], e["type"])
         evs.append({"t": round(e["t"], 3), "type": e["type"], "actors": acts, "conf": e.get("conf", 0.5), "note": note})

@@ -34,6 +34,8 @@ NEEDS = {
     ("篮下", "禁区"): {"drive", "cut"},
     ("回传", "传球", "分球", "传给", "策应", "转移", "回敲", "回球"): {"pass"},
     ("拉开", "空间", "两侧", "单打"): {"space"},
+    ("抢断", "断球", "断下", "抄截"): {"steal"},
+    ("失误", "丢球", "球权转换"): {"steal", "turnover"},
 }
 TOL = 1.0
 CLAUSE = re.compile(r"[^，,！!。；;？?]+[，,！!。；;？?]*")
@@ -82,8 +84,8 @@ def support_for(edl: dict, events: Optional[dict], span: Optional[tuple[float, f
         return set()
     a, b = span[0] - TOL, span[1] + TOL
     out = {f["type"] for f in edl["decisions"].get("facts") or [] if f["t0"] <= b and f["t1"] >= a}
-    out |= {e["type"] for e in (events or {}).get("events", [])
-            if a <= e["t"] <= b and float(e.get("conf") or 0) >= 0.35}
+    near = [e for e in (events or {}).get("events", []) if a <= e["t"] <= b and float(e.get("conf") or 0) >= 0.35]
+    out |= {e["type"] for e in near} | {e["subtype"] for e in near if e.get("subtype")}
     shot = edl.get("shot") or {}
     if shot.get("release_t") is not None and a <= shot["release_t"] <= b + 2.0:
         out.add("shot")

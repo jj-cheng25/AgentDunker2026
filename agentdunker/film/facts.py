@@ -21,7 +21,7 @@ STEP = 0.1
 @dataclass
 class Fact:
     id: str
-    type: str                     # pass | screen | drive | cut | closeout | help | space
+    type: str                     # pass | screen | drive | cut | closeout | help | space | steal | turnover
     t0: float
     t1: float
     actors: list
@@ -112,6 +112,13 @@ def derive(tracks: dict, court: dict, events: dict, fps: float, w0: float, w1: f
             add("pass", e["t"], e.get("t_end", e["t"] + 0.5), a[:2], f"{name(a[0], '持球人')}传给{name(a[1], '队友')}", e["conf"])
         elif e["type"] == "screen" and a:
             add("screen", e["t"], e.get("t_end", e["t"] + 1.0), a[:2], f"{name(a[0], '队友')}掩护", e["conf"])
+        elif e.get("subtype") in ("steal", "turnover"):           # official play-by-play, placed by M5
+            o = e.get("official") or {}
+            if e["subtype"] == "steal":
+                text = f"{name(e.get('stealer_track'), o.get('stealer') or '防守人')}抢断"
+            else:
+                text = f"{name(e.get('loser_track'), o.get('loser') or '持球人')}失误"
+            add(e["subtype"], e["t"], e["t"] + 0.8, a[:1], text, e["conf"])
     # Holder drives: ≥ 2 m closer to the basket within 2 s, ending ≤ 7 m from it.
     last_end = -1.0
     for i in range(i0, i1 - 5):
@@ -215,7 +222,8 @@ def derive(tracks: dict, court: dict, events: dict, fps: float, w0: float, w1: f
     return facts
 
 
-ANNO_COLOR = {"space": "good", "pass": "ball", "drive": "off", "cut": "off", "screen": "gold", "closeout": "warn", "help": "def"}
+ANNO_COLOR = {"space": "good", "pass": "ball", "drive": "off", "cut": "off", "screen": "gold", "closeout": "warn", "help": "def",
+              "steal": "warn", "turnover": "warn"}
 
 
 def annotations(facts: list[Fact], w0: float) -> list[dict]:
@@ -233,7 +241,7 @@ def annotations(facts: list[Fact], w0: float) -> list[dict]:
         elif f.type == "help":
             out.append({"type": "arrow", "path": {"who": a[0], "t": [t0, t1]}, "t": [t0, t1 + 0.4],
                         "color": "def", "dashed": True, "label": f.text})
-        elif f.type == "closeout":
+        elif f.type in ("closeout", "steal", "turnover") and a:
             out.append({"type": "focus", "who": a[0], "t": [t0, t1 + 0.6], "color": "warn", "label": f.text})
         elif f.type == "space":                 # closed outline through the five attackers, ordered by angle
             out.append({"type": "link", "ids": a[:1] + a[1:], "closed": True, "t": [t0, t1 + 0.4],
