@@ -10,6 +10,7 @@ names the environment variable (or key file) that holds each credential.
 from __future__ import annotations
 
 import copy
+import importlib
 import os
 import tomllib
 from dataclasses import dataclass
@@ -139,6 +140,10 @@ def threads() -> int:
     return int(get()["run"]["threads"])
 
 
+# shared scientific stack of the stages, imported once in the main thread before any stage thread starts
+PRELOAD = ("scipy.optimize", "scipy.ndimage", "scipy.signal", "scipy.stats", "scipy.io", "sklearn.cluster")
+
+
 def apply() -> None:
     """Export the settings for the analysis modules (they read os.environ at import time)."""
     c, l, m = get(), llm(), get()["moss"]
@@ -198,6 +203,16 @@ def apply() -> None:
         cv2.setNumThreads(threads())
     except Exception:  # noqa: BLE001
         pass
+    # The same race in the import system: tracking (scipy.ndimage, sklearn) and court calibration
+    # (scipy.optimize) importing scipy for the first time in two threads at once can leave it half-initialised
+    # ("partially initialized module scipy._lib._testutils", then KeyError 'scipy' in the other stage), and the
+    # film then dies at the audio mix (pyloudnorm -> scipy.signal). h04 held-out, 2026-11-20.
+    for name in PRELOAD:
+        try:
+            importlib.import_module(name)
+        except Exception:  # noqa: BLE001  (a minimal environment may lack one; the stage reports it)
+            pass
+
 
 
 def public() -> dict:

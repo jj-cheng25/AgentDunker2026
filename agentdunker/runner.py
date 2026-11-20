@@ -92,6 +92,9 @@ class _ThreadStdout(io.TextIOBase):
 
 
 _stdout_lock = threading.Lock()
+# Stages start in parallel threads (tracking and court calibration). Their first imports run one at a time:
+# two threads importing the same package tree at once can see it half-initialised (h04 held-out, 2026-11-20).
+_import_lock = threading.Lock()
 
 
 def _install_stdout() -> _ThreadStdout:
@@ -112,7 +115,9 @@ def _inprocess(mod: str, argv: list[str], log_path: Path) -> tuple[Optional[int]
         root.addHandler(handler)
         out.local.f = log
         try:
-            rc = importlib.import_module(f"{pkg}.__main__").main(argv)
+            with _import_lock:
+                entry = importlib.import_module(f"{pkg}.__main__").main
+            rc = entry(argv)
             return (rc if isinstance(rc, int) else 0), ""
         except SystemExit as e:
             code = e.code if isinstance(e.code, int) else (0 if e.code is None else 1)
