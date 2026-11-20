@@ -118,6 +118,7 @@ def test_doctor_fails_on_broken_chromium(broken_chrome, capsys):
 def test_run_warns_loudly_but_still_makes_a_film(broken_chrome, tmp_path, capsys):
     from test_e2e_synthetic import synthetic_clip
     clip = synthetic_clip(tmp_path / "clip.mp4", seconds=4.0)
+    before = set(Path(weights.short_tmpdir()).glob("adk-run-*"))    # other runs on the machine keep theirs
     rc = cli.main(["run", str(clip), "-o", str(tmp_path / "out"), "--offline",
                    "--skip", "tracks,court,identity,events,replay,narration"])
     err = capsys.readouterr().err
@@ -127,7 +128,7 @@ def test_run_warns_loudly_but_still_makes_a_film(broken_chrome, tmp_path, capsys
     assert rc == 0 and (tmp_path / "out" / "film.mp4").exists()
     rep = json.loads((tmp_path / "out" / "report.json").read_text())
     assert rep["agentdunker"]["chromium"]["ok"] is False
-    assert not list(Path(weights.short_tmpdir()).glob("adk-run-*"))     # private TMPDIR removed
+    assert not set(Path(weights.short_tmpdir()).glob("adk-run-*")) - before     # private TMPDIR removed
 
 
 # ---------------------------------------------------------------- 2. no network in --offline
