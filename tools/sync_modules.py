@@ -39,7 +39,7 @@ MODULES = {
     "m3": ("adk-cmd-m3", "4aacecf", "adk_identity", "identity"),
     "m4": ("adk-cmd-m4", "f54f495", "adk_replay", "replay"),
     "m5": ("adk-cmd-m5", "1e1082b", "adk_events", "events"),
-    "m6": ("adk-cmd-m6", "e78bb69", "adk_narration", "narration"),
+    "m6": ("adk-cmd-m6", "35a8b08", "adk_narration", "narration"),
     "m7": ("adk-cmd-m7", "2285403", "agentdunker", "film"),
 }
 

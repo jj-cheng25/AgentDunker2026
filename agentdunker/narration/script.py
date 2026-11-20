@@ -189,6 +189,11 @@ def check_line(text: str, slot: Slot, f: dict, roster: set[str]) -> list[str]:
     names = bad_names(text, set(f["allowed_names"]), roster)
     if names:
         errs.append("出现未授权的人名或外文：" + "、".join(names))
+    # two names run together read as one person (review h13: "克林根阿夫迪亚迅速出球")
+    allowed = [x for x in f["allowed_names"] if x]
+    glued = next(((a, b) for a in allowed for b in allowed if a != b and a + b in text), None)
+    if glued:
+        errs.append(f"人名“{glued[0]}”“{glued[1]}”连在一起，要写清两人的动作，如“{glued[0]}传给{glued[1]}”")
     nums = bad_numbers(text, set(f["allowed_numbers"]))
     if nums:
         errs.append("出现未授权的数字：" + "、".join(nums))

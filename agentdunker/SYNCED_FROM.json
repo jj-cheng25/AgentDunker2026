@@ -227,9 +227,9 @@
    "module": "m6",
    "branch_worktree": "adk-cmd-m6",
    "source_package": "adk_narration",
-   "commit": "e78bb69b5d09ad2727af3c375b5a23df30b8e5e2",
+   "commit": "35a8b08357bdd65fd777543516565f74e0da98e1",
    "files": 18,
-   "tree_sha256": "6b93a6b067f8954c",
+   "tree_sha256": "0532e9c0c3c007ac",
    "rules": [
     {
      "file": "__main__.py",

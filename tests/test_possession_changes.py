@@ -135,3 +135,11 @@ def test_long_team_label_shrinks_before_it_is_dropped():
         freeze._Canvas.text = real
     team = [s for t, s in seen if t == "步行者 · 43号"]
     assert team and 20 <= team[0] < 28, seen
+
+
+def test_commentary_rejects_two_names_run_together():
+    from agentdunker.narration.script import Slot, check_line
+    f = {"allowed_names": ["克林根", "阿夫迪亚", "卡马拉"], "allowed_numbers": [], "all_events": []}
+    slot = Slot(7, 21.7, 26.3, kind="event", budget=19)
+    assert any("连在一起" in e for e in check_line("面对多人协防，克林根阿夫迪亚迅速出球！", slot, f, set()))
+    assert not any("连在一起" in e for e in check_line("克林根传给阿夫迪亚，迅速出球！", slot, f, set()))
