@@ -6,6 +6,7 @@ every local play-by-play file is built once and cached (~/.cache/agentdunker.ide
 from __future__ import annotations
 
 import gzip
+import hashlib
 import json
 import logging
 import os
@@ -42,13 +43,38 @@ def _actions(path: Path) -> list:
     return d
 
 
+TYPES = {"001": "preseason", "002": "regular", "003": "allstar", "004": "playoffs", "005": "playin", "006": "cup_final"}
+
+
+def _extra_indexes() -> list[Path]:
+    """Older-season mirrors (data/pbp_mirror_hist: 2022-23 .. 2024-25), read after the main sources."""
+    return sorted(p for p in DATA.glob("pbp_mirror_*/pbp_index.json") if p.parent.name != "pbp_mirror")
+
+
 def _pbp_files() -> dict[str, dict]:
     files = {p.stem: {"path": str(p), "date": None, "type": None} for p in (DATA / "pbp").glob("*.json")}
     idx = DATA / "pbp_mirror" / "pbp_index.json"
     if idx.exists():
         for gid, meta in json.loads(idx.read_text()).items():
             files[gid] = {"path": str(DATA / meta["path"]), "date": meta.get("date"), "type": meta.get("type")}
+    for extra in _extra_indexes():      # only fills games no official file or main mirror has
+        for gid, meta in json.loads(extra.read_text()).items():
+            files.setdefault(gid, {"path": str(DATA / meta["path"]), "date": meta.get("date"), "type": meta.get("type")})
+    for gid, meta in files.items():
+        meta["type"] = meta["type"] or TYPES.get(gid[:3])
     return files
+
+
+def _index_path() -> Path:
+    """The index file is named after its sources, so new data rebuilds it and older readers of the plain
+    `pbp_compact.json.gz` (earlier releases sharing the cache directory) never see games they cannot handle."""
+    parts = []
+    for p in [DATA / "pbp", DATA / "pbp_mirror" / "pbp_index.json", *_extra_indexes()]:
+        if p.exists():
+            st = p.stat()
+            parts.append(f"{p.relative_to(DATA)}:{st.st_size}:{int(st.st_mtime)}")
+    sig = hashlib.sha1("|".join(parts).encode()).hexdigest()[:10]
+    return INDEX_CACHE.with_name(INDEX_CACHE.name.replace(".json.gz", f".{sig}.json.gz"))
 
 
 def _compact(acts: list) -> dict | None:
@@ -82,8 +108,9 @@ def _compact(acts: list) -> dict | None:
 
 @lru_cache(maxsize=1)
 def index() -> dict[str, dict]:
-    if INDEX_CACHE.exists():
-        return json.loads(gzip.decompress(INDEX_CACHE.read_bytes()))
+    path = _index_path()
+    if path.exists():
+        return json.loads(gzip.decompress(path.read_bytes()))
     out = {}
     for gid, meta in _pbp_files().items():
         try:
@@ -92,9 +119,11 @@ def index() -> dict[str, dict]:
             continue
         if c:
             out[gid] = {**c, "date": meta["date"], "type": meta["type"], "path": meta["path"]}
-    INDEX_CACHE.parent.mkdir(parents=True, exist_ok=True)
-    INDEX_CACHE.write_bytes(gzip.compress(json.dumps(out).encode()))
-    logger.info("games: indexed %d play-by-play files", len(out))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")     # parallel runs: whole file or nothing
+    tmp.write_bytes(gzip.compress(json.dumps(out).encode()))
+    os.replace(tmp, path)
+    logger.info("games: indexed %d play-by-play files -> %s", len(out), path.name)
     return out
 
 
@@ -146,17 +175,63 @@ def candidates(teams: set[str], readings: list[dict]) -> list[dict]:
     return out
 
 
-def rarity(readings: list[dict]) -> float | None:
+_ROUNDS = ((r"\b(?:1ST|FIRST) ROUND\b", "1"), (r"\b(?:2ND|SECOND) ROUND\b|\bSEMI", "2"),
+           (r"\b(?:EAST|WEST|EASTERN|WESTERN|CONF(?:ERENCE)?)\.? FINALS\b", "3"), (r"\b(?:NBA|THE) FINALS\b", "4"))
+
+
+def banner_context(readings: list[dict]) -> dict | None:
+    """What a score-bug banner says about the kind of game: {type, round?, game?, text}, or None.
+
+    "PLAY-IN TOURNAMENT" -> play-in; "WEST 1ST ROUND - MIN LEADS 3-1" / "SERIES TIED 2-2" -> playoffs, and the
+    series score gives the game number (3-1 -> game 5). Other banners (stat graphics, promos) say nothing."""
+    for r in readings:
+        text = r.get("banner") or ""
+        u = re.sub(r"\s+", " ", text.upper())
+        if re.search(r"\bPLAY[ -]?IN\b", u):
+            return {"type": "playin", "text": text}
+        ctx = {}
+        m = re.search(r"\b(?:LEADS?|SERIES|TIED)\b(?: (?:SERIES|TIED))? ?([0-3]) ?- ?([0-3])\b", u)
+        if m:
+            ctx["game"] = int(m.group(1)) + int(m.group(2)) + 1
+        rnd = next((k for pat, k in _ROUNDS if re.search(pat, u)), None)
+        if rnd:
+            ctx["round"] = rnd
+            g = re.search(r"\bGAME ([1-7])\b", u)
+            if g and "game" not in ctx:
+                ctx["game"] = int(g.group(1))
+        if ctx:
+            return {"type": "playoffs", **ctx, "text": text}
+    return None
+
+
+def fits_banner(gid: str, typ: str | None, ctx: dict | None) -> bool:
+    """Playoff ids are 004 YY 00 R S G (round, series, game)."""
+    if not ctx:
+        return True
+    if (typ or TYPES.get(gid[:3])) != ctx["type"]:
+        return False
+    if ctx["type"] == "playoffs" and len(gid) == 10:
+        if ctx.get("round") and gid[7] != ctx["round"]:
+            return False
+        if ctx.get("game") and gid[9] != str(ctx["game"]):
+            return False
+    return True
+
+
+def rarity(readings: list[dict], banner: dict | None = None) -> float | None:
     """Share of all local games (any teams) whose score timeline fits every reading; None if uncheckable.
 
     A low share means the score bug state is specific, so a single same-teams candidate is unlikely to be a
-    coincidence with a game missing from the local data."""
+    coincidence with a game missing from the local data. With `banner`, a game must also be of the kind the
+    banner names (a playoff game 5 of the first round, say)."""
     rs = [r for r in readings if r.get("period") is not None and r.get("clock_s") is not None
           and len(r.get("scores") or {}) == 2]
     if not rs:
         return None
     n = 0
-    for g in index().values():
+    for gid, g in index().items():
+        if banner and not fits_banner(gid, g.get("type"), banner):
+            continue
         for flip in (False, True):
             ok = True
             for r in rs:

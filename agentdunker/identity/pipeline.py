@@ -68,17 +68,23 @@ def _match_game(sb: list[dict], teams: list[str], nums: dict[str, list[str]], cf
     if len(teams) != 2:
         res["reason"] = "score bug teams not read"
         return res
+    banner = games.banner_context(sb)
     cands = games.candidates(set(teams), sb)
+    if banner:
+        res["banner"] = banner
+        cands = [c for c in cands if games.fits_banner(c["game_id"], c["type"], banner)]
     if not cands:
-        res["reason"] = f"no local game of {teams[0]}-{teams[1]} fits the score bug"
+        res["reason"] = (f"no local game of {teams[0]}-{teams[1]} fits the score bug"
+                         + (f" and the banner {banner['text']!r}" if banner else ""))
         return res
     maps = [{"A": teams[0], "B": teams[1]}, {"A": teams[1], "B": teams[0]}]
-    good, plausible = [], []
+    good, plausible, rosterless = [], [], []
     for c in cands:
         lu = _lineups(c["game_id"], sb)
         c["lineups"] = {k: sorted(v, key=int) for k, v in (lu or {}).items()}
         if not lu:
-            plausible.append(c)
+            # no boxscore (older seasons from the PBP mirror): the jerseys cannot confirm or reject it
+            (rosterless if games.roster(c["game_id"]) is None else plausible).append(c)
             continue
         fits = [_fit(nums, m, lu) for m in maps]
         k = max(range(2), key=lambda i: fits[i][0])
@@ -89,19 +95,29 @@ def _match_game(sb: list[dict], teams: list[str], nums: dict[str, list[str]], cf
         elif n < 3:
             plausible.append(c)
     res["candidates"] = [{k: v for k, v in c.items() if k != "lineups"} for c in cands]
-    p = games.rarity(sb)
+    # a banner that names the game number (playoffs) is part of the state; "PLAY-IN" alone narrows the candidates
+    # but says too little to make an early 0-0 rare
+    p = games.rarity(sb, banner if banner and banner.get("game") else None)
     res["state_share"] = None if p is None else round(p, 4)
-    if len(good) + len(plausible) == 1 and p is not None and p <= cfg.max_state_share:
-        c = (good + plausible)[0]
+    # A game the read jerseys confirm beats games without a boxscore: before the older seasons were added those
+    # were unknown games, a risk the state share already prices. Otherwise exactly one candidate must remain.
+    pool = good if len(good) == 1 and not plausible else good + plausible + rosterless
+    if len(pool) == 1 and p is not None and p <= cfg.max_state_share:
+        c = pool[0]
         hit, n = c.get("roster_fit", (0, 0))
         share = hit / n if n >= 3 else None
         need = cfg.min_fit if p > 0.01 else 0.5      # a rare state needs less lineup confirmation
-        if (share is None and p <= 0.01) or (share is not None and share >= need):
+        if share is not None and share >= need:
             res.update(status="matched", game_id=c["game_id"],
-                       conf=round((1 - p) * (0.6 + 0.4 * (share if share is not None else 0.5) * min(1.0, n / 6)), 3))
+                       conf=round((1 - p) * (0.6 + 0.4 * share * min(1.0, n / 6)), 3))
+        elif share is None and p <= 0.01:
+            # no lineup check: the rarer the state, the less room for a game missing from the local data
+            res.update(status="matched", game_id=c["game_id"],
+                       conf=round((1 - p) * (0.6 + 0.2 * min(1.0, n / 6) + 0.3 * max(0.0, 1 - p / 0.01)), 3))
     if res["status"] != "matched":
         res.update(status="uncertain", conf=0.0,
-                   reason=f"{len(good) + len(plausible)} candidate(s) not rejected by the read jerseys of {len(cands)}; "
+                   reason=f"{len(good) + len(plausible) + len(rosterless)} candidate(s) not rejected by the read "
+                          f"jerseys of {len(cands)} ({len(rosterless)} without a boxscore); "
                           f"score-bug state shared by {res['state_share']} of local games")
     chosen = next((c for c in cands if c["game_id"] == res["game_id"]), None)
     if chosen:

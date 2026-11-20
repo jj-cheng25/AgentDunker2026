@@ -55,6 +55,7 @@ class Run:
         self.work = self.out / "work"
         self.work.mkdir(parents=True, exist_ok=True)
         self.tracks_path = self.work / "tracks.json"    # tracks_linked.json once M3 relinked a tracker swap
+        self.identity_path = self.work / "identity.json"  # identity_film.json once the PBP named the shooter
         self.reuse, self.use_llm, self.use_moss_vl, self.skip = reuse, use_llm, use_moss_vl, set(skip)
         self.mods: dict[str, ModuleResult] = {}
         self.timing: dict[str, float] = {}
@@ -129,6 +130,13 @@ class Run:
                     args += [flag, w / f"{name}.json"]
                     ins.append(w / f"{name}.json")
             events = self.module("events", "m5", args, ins, 2400)
+            filled = director.official_shooter_fill(identity, events)
+            if filled:
+                # M3's identity.json stays as written; M4, M6 and the nameplates read the filled copy
+                tid = str(events["shot"]["shooter_track"])
+                identity, self.identity_path = filled, _dump(w / "identity_film.json", filled)
+                self.notes.append(f"shooter track {tid} named from the play-by-play: "
+                                  f"{filled['players'][tid]['name']} ({filled['players'][tid].get('name_zh')})")
         return {"tracks": tracks, "court": court, "identity": identity, "events": events}
 
     def narrate(self, edl: dict) -> Optional[dict]:
@@ -139,8 +147,8 @@ class Run:
         ndir = self.work / "narration"
         ndir.mkdir(exist_ok=True)
         args = ["--events", doc_path]
-        if (self.work / "identity.json").exists():
-            args += ["--identity", self.work / "identity.json"]
+        if self.identity_path.exists():
+            args += ["--identity", self.identity_path]
         out = ndir / "narration.json"
         res = run_module("narration", "m6", [*args, "-o", out], out, self.work, inputs=[doc_path], timeout=2400)
         if not res.ok:
@@ -187,8 +195,8 @@ class Run:
             edl["decisions"]["m4_timeline"] = str(tl)
         else:
             args += ["--start", w0, "--end", w1]
-        if (self.work / "identity.json").exists():
-            args += ["--identity", self.work / "identity.json"]
+        if self.identity_path.exists():
+            args += ["--identity", self.identity_path]
         title = edl["decisions"].get("replay_title")
         if title and _m4_supports("--title"):
             args += ["--title", title]

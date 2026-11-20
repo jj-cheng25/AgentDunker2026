@@ -8,13 +8,14 @@ a model (``gemini-3.8-flash``), from verified events only, with a template fallb
 """
 from __future__ import annotations
 
+import copy
 import logging
 import re
 from typing import Optional
 
 import numpy as np
 
-from . import models
+from . import models, season
 from .render.nameplates import short_name
 from .render.style import TEAM_ZH
 
@@ -43,6 +44,38 @@ EVENT_CONF = 0.35
 
 
 # ---------------------------------------------------------------- facts from module outputs
+
+OFFICIAL_FILL_CONF = 0.75
+
+
+def official_shooter_fill(identity: Optional[dict], events: Optional[dict]) -> Optional[dict]:
+    """A copy of ``identity`` with the shooter's name from the play-by-play, when identity could not name the track.
+
+    That happens when the matched game has no boxscore (older seasons come from a PBP mirror: a read jersey cannot
+    be mapped to a player) or the read number is not on the roster. Only for the only field goal in the clip
+    window, of the shooter track's own team, with no other track already named as that player
+    (2026-11-20 c04: LAC #8 in the 2025 first round, game 5 = K. Dunn). None when nothing changes."""
+    shot = (events or {}).get("shot") or {}
+    off, tid = shot.get("official") or {}, shot.get("shooter_track")
+    m = off.get("match") or {}
+    if tid is None or not off.get("person_id") or m.get("n_candidates") != 1 or not m.get("team"):
+        return None
+    if float(off.get("conf") or 0) < OFFICIAL_FILL_CONF:
+        return None
+    players = (identity or {}).get("players") or {}
+    p = players.get(str(tid))
+    if not p or p.get("name") or p.get("person_id") or p.get("team_abbr") != off.get("team"):
+        return None
+    if any(str(q.get("person_id")) == str(off["person_id"]) for q in players.values()):
+        return None
+    zh = season.zh_name(off["person_id"]) or {}
+    out = copy.deepcopy(identity)
+    out["players"][str(tid)].update(
+        name=off.get("player"), person_id=off["person_id"], name_zh=zh.get("name_zh"),
+        name_zh_short=zh.get("name_zh_short"), conf=round(min(float(p.get("conf") or 0), float(off["conf"])), 3),
+        name_source="official_pbp")
+    return out
+
 
 def player_names(identity: Optional[dict]) -> dict[int, dict]:
     """track id → {short, full, jersey, team_abbr} for confident identities only."""

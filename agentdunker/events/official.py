@@ -37,11 +37,13 @@ def _pbp_path(gid: str) -> Path | None:
     p = DATA / "pbp" / f"{gid}.json"
     if p.exists():
         return p
-    idx = DATA / "pbp_mirror" / "pbp_index.json"
-    if idx.exists():
-        meta = json.loads(idx.read_text()).get(gid)
-        if meta and (DATA / meta["path"]).exists():
-            return DATA / meta["path"]
+    # the main mirror index first, then older-season mirrors (data/pbp_mirror_hist: 2022-23 .. 2024-25)
+    extra = sorted(p for p in DATA.glob("pbp_mirror_*/pbp_index.json") if p.parent.name != "pbp_mirror")
+    for idx in [DATA / "pbp_mirror" / "pbp_index.json", *extra]:
+        if idx.exists():
+            meta = json.loads(idx.read_text()).get(gid)
+            if meta and (DATA / meta["path"]).exists():
+                return DATA / meta["path"]
     return None
 
 

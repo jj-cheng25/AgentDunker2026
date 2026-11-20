@@ -38,6 +38,32 @@ def _table(season: str, kind: str, table: str) -> dict:
     return {str(r.get("PLAYERID")): r for r in rows}
 
 
+@lru_cache(maxsize=1)
+def _zh_names() -> dict[str, tuple[str, str]]:
+    """PLAYERID → (first, last) in Chinese, from every season table on disk (newest season first)."""
+    out: dict[str, tuple[str, str]] = {}
+    for p in sorted(DATA.glob("*.json"), reverse=True):
+        try:
+            rows = json.loads(p.read_text()).get("rows") or []
+        except (OSError, ValueError):
+            continue
+        for r in rows:
+            pid = str(r.get("PLAYERID") or "")
+            first, last = str(r.get("FIRSTNAME") or "").strip(), str(r.get("LASTNAME") or "").strip()
+            if pid and (first or last) and pid not in out:
+                out[pid] = (first, last)
+    return out
+
+
+def zh_name(person_id) -> Optional[dict]:
+    """{'name_zh': '克里斯·邓恩', 'name_zh_short': '邓恩'} from the NBA China season tables, or None."""
+    fl = _zh_names().get(str(person_id or ""))
+    if not fl:
+        return None
+    first, last = fl
+    return {"name_zh": f"{first}·{last}" if first and last else (last or first), "name_zh_short": last or first}
+
+
 def gravity(identity: Optional[dict], track_id: Optional[int]) -> Optional[dict]:
     """{'caption': '2025-26 赛季引力', 'value': '+16.2', 'raw': 16.237, 'source': file} or None."""
     if not identity or track_id is None:
