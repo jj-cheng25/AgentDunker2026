@@ -15,6 +15,7 @@ from typing import Optional
 import numpy as np
 
 from . import models
+from .render.nameplates import short_name
 from .render.style import TEAM_ZH
 
 logger = logging.getLogger(__name__)
@@ -30,6 +31,9 @@ REPLAY_FINAL_SPEED = 0.5
 REPLAY_MIN_SPEED, REPLAY_MAX_SPEED = 0.5, 1.0
 REPLAY_END_HOLD = 1.0
 REPLAY_MIN_S = 3.0
+# a shorter run is used only when it leads straight into the release and no ≥ 3 s run exists (h10 held-out:
+# the clip starts 2.7 s before a catch-and-shoot three, so the 3D replay was dropped); one phase at most
+REPLAY_MIN_LEAD_S = 1.8
 PRE_RELEASE = 0.65
 RESUME_SLOW, RESUME_FAST = 0.5, 0.87
 RESUME_TAIL = 4.5             # source seconds after the make kept in the resume segment
@@ -47,7 +51,8 @@ def player_names(identity: Optional[dict]) -> dict[int, dict]:
         conf = float(p.get("conf") or 0)
         if conf < 0.5:
             continue
-        short = p.get("name_zh_short") or ((p.get("name_zh") or "").split("·")[-1]) if conf >= 0.6 else ""
+        # no NBA China name (h04 held-out: E.J. Liddell): the English surname, as the live nameplates show it
+        short = short_name(p) if conf >= 0.6 else ""
         out[int(tid)] = {"short": short, "full": (p.get("name_zh") or short) if conf >= 0.6 else "",
                          "jersey": str(p.get("jersey") or ""), "team_abbr": p.get("team_abbr"),
                          "conf": conf}
@@ -74,14 +79,15 @@ def shot_info(events: Optional[dict], n_dur: float) -> Optional[dict]:
 def replay_window(shots: list[dict], court: Optional[dict], fps: float, release_t: Optional[float],
                   n_frames: int) -> Optional[tuple[float, float, str]]:
     """Longest calibrated stretch of a wide shot (gaps ≤ 0.35 s bridged, 0.5 s after a cut skipped), ending
-    0.65 s before release when the release is inside it. None when shorter than 3 s."""
+    0.65 s before release when the release is inside it. None when shorter than 3 s, unless a run of at least
+    REPLAY_MIN_LEAD_S ends at the release (the clip starts just before the shot)."""
     if not court:
         return None
     ok = np.zeros(n_frames, bool)
     for fr in court.get("frames", []):
         if 0 <= fr["f"] < n_frames and fr.get("ok"):
             ok[fr["f"]] = True
-    best = None
+    best = lead = None
     for s in shots:
         if s.get("kind") != "wide":
             continue
@@ -101,13 +107,18 @@ def replay_window(shots: list[dict], court: Optional[dict], fps: float, release_
                 g += 1
             t0, t1 = f / fps, last / fps
             # Prefer the run that ends nearest the shot, then the longest.
-            score = (t1 - t0) + (5.0 if release_t is not None and abs(release_t - PRE_RELEASE - t1) < 0.3 else 0)
+            leads = release_t is not None and abs(release_t - PRE_RELEASE - t1) < 0.3
+            score = (t1 - t0) + (5.0 if leads else 0)
             if t1 - t0 >= REPLAY_MIN_S and (best is None or score > best[0]):
                 best = (score, round(t0, 3), round(t1, 3))
+            elif leads and t1 - t0 >= REPLAY_MIN_LEAD_S - 1e-6 and (lead is None or score > lead[0]):
+                lead = (score, round(t0, 3), round(t1, 3))
             f = g
-    if best is None:
-        return None
-    return best[1], best[2], "court-ok wide run"
+    if best is not None:
+        return best[1], best[2], "court-ok wide run"
+    if lead is not None:
+        return lead[1], lead[2], "court-ok wide lead-in (short)"
+    return None
 
 
 # ---------------------------------------------------------------- phases

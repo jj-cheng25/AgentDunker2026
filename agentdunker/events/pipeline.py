@@ -213,7 +213,16 @@ def _main_shot(attempts, info, video, rim_by_f, tracks, court, identity, use_vlm
         doc["official"] = off
         doc["xfg"] = off.get("xfg")
         if off.get("conf", 0) >= 0.8 and (off["match"].get("name") or override):
-            if made is None or made_conf < 0.8:
+            # the only field goal in the clip window, firmly matched: the play-by-play outcome stands even against
+            # a confident ball path (h12 held-out: a rim-bouncing three made, read as "came down outside the rim")
+            firm = off.get("conf", 0) >= 0.9 and off["match"].get("n_candidates") == 1
+            if made is None or made_conf < 0.8 or (firm and made is not off["made"]):
+                if made is not None and made is not off["made"]:
+                    doc["evidence"]["made_disagreement"] = {"ball_path": made, "conf": made_conf,
+                                                            "rule": judged.get("rule"), "official": off["made"]}
+                    a["made"] = {**judged, "made": off["made"], "rule": "official_pbp"}   # in place: `a is shot_att`
+                    if not off["made"]:
+                        doc["made_t"] = None
                 doc["made"], doc["made_source"], doc["made_conf"] = off["made"], "official_pbp", off["conf"]
             doc["points"] = off.get("points") or doc["points"]
     return doc, a
