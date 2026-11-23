@@ -130,6 +130,12 @@ class Run:
                     args += [flag, w / f"{name}.json"]
                     ins.append(w / f"{name}.json")
             events = self.module("events", "m5", args, ins, 2400)
+            swapped = director.official_shooter_swap(identity, events)
+            if swapped:
+                k = events["shot"]["evidence"]["shooter_kept"]
+                identity = swapped
+                self.notes.append(f"names of tracks {k['track']} and {k['pbp_track']} swapped: the play-by-play "
+                                  f"scorer {k['player']} is the video's shooter")
             filled = director.official_shooter_fill(identity, events)
             if filled:
                 tid = str(events["shot"]["shooter_track"])
@@ -141,7 +147,7 @@ class Run:
                 n = sum(p.get("name_zh_source") == "season_tables" for p in zh["players"].values())
                 identity = zh
                 self.notes.append(f"{n} Chinese name(s) from the NBA China season tables")
-            if filled or zh:
+            if swapped or filled or zh:
                 # M3's identity.json stays as written; M4, M6 and the nameplates read the filled copy
                 self.identity_path = _dump(w / "identity_film.json", identity)
         return {"tracks": tracks, "court": court, "identity": identity, "events": events}

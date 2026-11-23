@@ -34,6 +34,19 @@ class Court:
         return (float(x), float(y)) if abs(x) < 60 and abs(y) < 35 else None
 
 
+    def on_court(self, f: int, xy: tuple[float, float], margin_ft: float = 1.5, slack: int = 6) -> bool | None:
+        """Whether an image point (a person's feet) lies on the floor inside the lines + margin. None when no
+        homography is known within ``slack`` frames; False also for points the homography throws far off."""
+        g = next((g for d in range(slack + 1) for g in (f - d, f + d) if g in self.H), None)
+        if g is None:
+            return None
+        p = self.H[g] @ np.array([xy[0], xy[1], 1.0])
+        if abs(p[2]) < 1e-12:
+            return None
+        x, y = p[0] / p[2], p[1] / p[2]
+        return bool(abs(x) <= 47 + margin_ft and abs(y) <= 25 + margin_ft)
+
+
 def nearest_rim(xy: tuple[float, float]) -> tuple[float, float]:
     return min(RIMS_FT, key=lambda r: (r[0] - xy[0]) ** 2 + (r[1] - xy[1]) ** 2)
 

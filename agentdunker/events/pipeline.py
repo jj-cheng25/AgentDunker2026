@@ -16,7 +16,7 @@ from .court import Court, is_three, nearest_rim
 from .official import clock_secs, clock_to_t, defence_never_had_ball, match_shot, possession_changes
 from .possession import Segment, ambiguous_frames, ball_states, holders
 from .release import Release, find_release
-from .release_pose import PoseCache, hand_offs, people_near_ball, reaches_rim, shooter_of
+from .release_pose import PoseCache, hand_offs, on_floor, people_near_ball, reaches_rim, shooter_of
 from .rimvisit import RimVisit, find_visits, rim_relative
 from .scan import DetCache, detect_frames
 from .tracks import Tracks
@@ -71,7 +71,7 @@ def run(video: str, tracks_path: str | None, court_path: str | None = None, iden
                 pose = PoseNear(threads=threads)
             win = [f for f in fr if v.f_first - 1.5 * fps <= f <= f_end]
             people = people_near_ball(video, ball, win, pose_cache, pose)
-            hos = hand_offs(ball, people, fps)
+            hos = hand_offs(ball, on_floor(people, tracks, court), fps)
             f_cross = judged.get("f_cross")
             for i, h in enumerate(hos):
                 arrive = reaches_rim(ball, rim_by_f, h.f, fps)
@@ -183,13 +183,8 @@ def _main_shot(attempts, info, video, rim_by_f, tracks, court, identity, use_vlm
     path = [[info.t(f), round(b.xy[0], 1), round(b.xy[1], 1)] for f, b in sorted(a["ball"].items())
             if rel.f - 1 <= f <= f_end]
     off = match_shot(identity, rel.shooter_track, made)
-    shooter, override = rel.shooter_track, None
-    alt = official_shooter_track(identity, off, shooter)
-    if alt is not None:
-        override = {"from": shooter, "to": alt, "by": "official_pbp", "player": off.get("player")}
-        logger.info("shooter: track %s -> %s (the only field goal in the clip window is %s's)", shooter, alt,
-                    off.get("player"))
-        shooter = rel.shooter_track = alt      # the attempt list, shot events and actions follow
+    shooter, override, kept = arbitrate(identity, off, rel.shooter_track, a["ball"], tracks, rel.f, fps)
+    rel.shooter_track = shooter      # the attempt list, shot events and actions follow
     points, shot_xy, shot_dist = None, None, None
     if court and shooter is not None:
         p = tracks.box(shooter, int(round(rel.f - 0.3 * fps))) or tracks.box(shooter, int(rel.f))
@@ -209,6 +204,8 @@ def _main_shot(attempts, info, video, rim_by_f, tracks, court, identity, use_vlm
            "evidence": {"release": rel.evidence, "made": {k: judged.get(k) for k in ("rule", "crossings", "vlm")}}}
     if override:
         doc["evidence"]["shooter_override"] = override
+    if kept:
+        doc["evidence"]["shooter_kept"] = kept
     doc["shot_type"], doc["shot_type_conf"] = _shot_type(a["ball"], rel.f, fps, a.get("dets", {}), tracks, shooter)
     if off:
         doc["official"] = off
@@ -328,6 +325,61 @@ def _strip_defence(segs: list[Segment], tracks: Tracks, defence: str, f_release:
         else:
             out.append(s)
     return out, n
+
+
+PBP_HOLD_S = 1.5     # the PBP scorer's track must have had the ball in this long before the release ...
+PBP_MIN_HELD = 3     # ... in at least this many observed frames, before it takes the shot from the video's pick,
+PBP_HELD_SHARE = 0.5  # ... and in at least half as many frames as the video's pick
+
+
+def ball_contact_frames(ball: dict, tracks: Tracks, tid: int, f0: float, f1: float) -> int:
+    """Frames in [f0, f1] where the track's observed box holds the ball (release.HOLD gap)."""
+    from .release import HOLD
+    from .tracks import contact
+    n = 0
+    for f, b in ball.items():
+        if f0 <= f <= f1:
+            p = tracks.box(tid, f)
+            if p is not None and p.observed and contact(b.xy, b.r, p.box) <= HOLD:
+                n += 1
+    return n
+
+
+def _team_abbr(identity: dict | None, tracks: Tracks, tid: int | None) -> str | None:
+    """A track's team as a tricode: identity's own read for the player, else its M1 team label's abbreviation."""
+    p = ((identity or {}).get("players") or {}).get(str(tid)) or {}
+    if p.get("team_abbr"):
+        return p["team_abbr"]
+    return (((identity or {}).get("teams") or {}).get(tracks.team_of(tid) or "") or {}).get("abbr")
+
+
+def arbitrate(identity: dict | None, off: dict | None, shooter: int | None, ball: dict, tracks: Tracks,
+              f_rel: float, fps: float) -> tuple[int | None, dict | None, dict | None]:
+    """(shooter, override, kept) when the play-by-play names a different player than the video's shooter.
+
+    The named track takes the shot only if it had the ball before the release, at least half as long as the
+    video's pick (h03/h04/h22/h19 held-out, c08 bench). Otherwise a video shooter on the scorer's team is kept
+    and the names are flagged as swapped (h16: McDaniels's pull-up, his name on Gobert's track); a video
+    shooter on the other team is dropped, since neither track can be the scorer (h01/h07: the shooter's own
+    track was lost or swapped in M1)."""
+    alt = official_shooter_track(identity, off, shooter)
+    if alt is None:
+        return shooter, None, None
+    span = (f_rel - PBP_HOLD_S * fps, f_rel + 0.1 * fps)
+    held = ball_contact_frames(ball, tracks, alt, *span)
+    held_v = ball_contact_frames(ball, tracks, shooter, *span) if shooter is not None else 0
+    info = {"player": off.get("player"), "held": held, "held_video_pick": held_v}
+    if held >= PBP_MIN_HELD and held >= PBP_HELD_SHARE * held_v:
+        logger.info("shooter: track %s -> %s (the only field goal in the clip window is %s's)", shooter, alt,
+                    off.get("player"))
+        return alt, {"from": shooter, "to": alt, "by": "official_pbp", **info}, None
+    if shooter is not None and _team_abbr(identity, tracks, shooter) == off.get("team"):
+        logger.info("shooter: keep track %s; %s's named track %s never had the ball", shooter, off.get("player"), alt)
+        return shooter, None, {"track": shooter, "pbp_track": alt, "person_id": off.get("person_id"), **info}
+    logger.info("shooter: none (track %s is not on %s; %s's track %s never had the ball)", shooter,
+                off.get("team"), off.get("player"), alt)
+    return None, {"from": shooter, "to": None, "by": "official_pbp", **info,
+                  "why": "the video's shooter is on the other team and the scorer's track never had the ball"}, None
 
 
 def official_shooter_track(identity: dict | None, off: dict | None, shooter: int | None) -> int | None:

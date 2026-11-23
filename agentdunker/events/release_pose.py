@@ -180,9 +180,38 @@ def shooter_of(h: HandOff, tracks: Tracks, dets: dict, fps: float) -> tuple[int 
         return None, votes
     best = max(votes, key=votes.get)
     held_most = max(whole, key=whole.get)
-    if tracks.team_of(best) and tracks.team_of(held_most) and tracks.team_of(best) != tracks.team_of(held_most):
-        best = held_most  # a defender's hand at the very end is a contest, not the shooter
+    if (tracks.team_of(best) and tracks.team_of(held_most) and tracks.team_of(best) != tracks.team_of(held_most)
+            and votes[best] - votes.get(held_most, 0.0) < max(1.0, 0.5 * abs(votes[best]))):
+        # a defender's hand at the very end is a contest, not the shooter -- unless the last hold clearly was
+        # the defender's teammate's (h19 held-out: Towns 3.29 vs the defender behind him 0.29)
+        best = held_most
     return best, {k: round(v, 2) for k, v in votes.items()}
+
+
+def on_floor(people: dict[int, list[Person]], tracks: Tracks, court) -> dict[int, list[Person]]:
+    """Only people standing on the floor can hold the ball. A high ball flies past the bench and the front row,
+    and a spectator's wrist near it in the image 'held' it at its apex and took the release from the shooter
+    (held-out h03, h04, h22; c11 bench: the crowd right behind a far-side shooter). A person is kept when the
+    feet map inside the lines + margin, or the box is an M1 player's (a jump shooter's feet leave the floor and
+    can project past a far sideline). Without a homography nobody is dropped."""
+    if not court:
+        return people
+    from .release import _iou
+    out, dropped = {}, 0
+    for f, ps in people.items():
+        keep = []
+        for p in ps:
+            x0, _, x1, y1 = p.box
+            if (court.on_court(f, ((x0 + x1) / 2, y1)) is not False
+                    or any(_iou(t.box, p.box) >= 0.3 for t in tracks.players(f))):
+                keep.append(p)
+            else:
+                dropped += 1
+        out[f] = keep
+    if dropped:
+        import logging
+        logging.getLogger(__name__).info("%d pose people off the floor left out of the holds", dropped)
+    return out
 
 
 def track_of(person: Person, tracks: Tracks, f: int, ball_xy: tuple[float, float] | None = None) -> int | None:

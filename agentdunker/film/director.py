@@ -77,6 +77,32 @@ def official_shooter_fill(identity: Optional[dict], events: Optional[dict]) -> O
     return out
 
 
+SWAP_KEYS = ("name", "person_id", "jersey", "name_zh", "name_zh_short")
+
+
+def official_shooter_swap(identity: Optional[dict], events: Optional[dict]) -> Optional[dict]:
+    """A copy of ``identity`` with the names of two team-mates swapped, when M5 kept its own shooter against the
+    play-by-play: the scorer's name sat on a track that never had the ball while the shooter track, his
+    team-mate, carried it (2026-11-23 h16: McDaniels's pull-up was named Gobert and Gobert's track McDaniels).
+    Only when both tracks are on the scorer's team. None when nothing changes."""
+    shot = (events or {}).get("shot") or {}
+    kept = (shot.get("evidence") or {}).get("shooter_kept") or {}
+    off = shot.get("official") or {}
+    a, b = kept.get("track"), kept.get("pbp_track")
+    players = (identity or {}).get("players") or {}
+    pa, pb = players.get(str(a)), players.get(str(b))
+    if a is None or b is None or a == b or not pa or not pb or a != shot.get("shooter_track"):
+        return None
+    if str(pb.get("person_id")) != str(kept.get("person_id")) or not (pa.get("team_abbr") == pb.get("team_abbr") == off.get("team")):
+        return None
+    out = copy.deepcopy(identity)
+    qa, qb = out["players"][str(a)], out["players"][str(b)]
+    for k in SWAP_KEYS:
+        qa[k], qb[k] = pb.get(k), pa.get(k)
+    qa["name_source"] = qb["name_source"] = "official_pbp_swap"
+    return out
+
+
 def chinese_names_fill(identity: Optional[dict]) -> Optional[dict]:
     """A copy of ``identity`` where players with a person id but no NBA China name get one from the season
     tables (review h15: Jonas Valančiūnas had no Chinese name for that game and showed his English surname).
