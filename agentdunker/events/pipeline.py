@@ -331,6 +331,7 @@ def _strip_defence(segs: list[Segment], tracks: Tracks, defence: str, f_release:
 PBP_HOLD_S = 1.5     # the PBP scorer's track must have had the ball in this long before the release ...
 PBP_MIN_HELD = 3     # ... in at least this many observed frames, before it takes the shot from the video's pick,
 PBP_HELD_SHARE = 0.5  # ... and in at least half as many frames as the video's pick
+PBP_CONTEST_GAP = 0.3  # or the video's pick, on the other team, is this close (body heights) to it at the release
 
 
 def ball_contact_frames(ball: dict, tracks: Tracks, tid: int, f0: float, f1: float) -> int:
@@ -344,6 +345,21 @@ def ball_contact_frames(ball: dict, tracks: Tracks, tid: int, f0: float, f1: flo
             if p is not None and p.observed and contact(b.xy, b.r, p.box) <= HOLD:
                 n += 1
     return n
+
+
+def box_gap(tracks: Tracks, a: int, b: int, f: float, fps: float) -> float | None:
+    """Smallest gap between two tracks' boxes (observed or bridged) within 0.2 s of frame f, in body heights."""
+    best = None
+    for g in range(int(f - 0.2 * fps), int(f + 0.2 * fps) + 1):
+        pa, pb = tracks.box(a, g), tracks.box(b, g)
+        if pa is None or pb is None:
+            continue
+        h = max(1.0, min(pa.box[3] - pa.box[1], pb.box[3] - pb.box[1]))
+        dx = max(pa.box[0] - pb.box[2], 0.0, pb.box[0] - pa.box[2])
+        dy = max(pa.box[1] - pb.box[3], 0.0, pb.box[1] - pa.box[3])
+        d = (dx * dx + dy * dy) ** 0.5 / h
+        best = d if best is None else min(best, d)
+    return best
 
 
 def _team_abbr(identity: dict | None, tracks: Tracks, tid: int | None) -> str | None:
@@ -377,6 +393,12 @@ def arbitrate(identity: dict | None, off: dict | None, shooter: int | None, ball
     if shooter is not None and _team_abbr(identity, tracks, shooter) == off.get("team"):
         logger.info("shooter: keep track %s; %s's named track %s never had the ball", shooter, off.get("player"), alt)
         return shooter, None, {"track": shooter, "pbp_track": alt, "person_id": off.get("person_id"), **info}
+    gap = box_gap(tracks, alt, shooter, f_rel, fps) if shooter is not None else None
+    if gap is not None and gap <= PBP_CONTEST_GAP:
+        # the video's pick is a defender right on the scorer at the release: he was contesting the scorer's shot,
+        # whose own box M1 lost or the ball detections missed (n14 new held-out: LeBron James's corner three)
+        logger.info("shooter: track %s -> %s (%s's defender at the release)", shooter, alt, off.get("player"))
+        return alt, {"from": shooter, "to": alt, "by": "official_pbp_contested", "gap": round(gap, 2), **info}, None
     logger.info("shooter: none (track %s is not on %s; %s's track %s never had the ball)", shooter,
                 off.get("team"), off.get("player"), alt)
     return None, {"from": shooter, "to": None, "by": "official_pbp", **info,

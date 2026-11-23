@@ -77,6 +77,10 @@ def test_the_named_track_takes_the_shot_only_if_it_had_the_ball():
     tr = _tracks({5: near, 4: far}, {5: "B", 4: "A"})
     s, ov, kept = P.arbitrate(IDENT, _off(), 5, _ball(range(0, 30)), tr, 30.0, 30.0)
     assert (s, ov["from"], ov["to"], kept) == (None, 5, None, None)
+    # ... unless the pick is the defender right on the named track at the release: he contested its shot
+    tr = _tracks({5: near, 4: (165, 100, 225, 260)}, {5: "B", 4: "A"})
+    s, ov, kept = P.arbitrate(IDENT, _off(), 5, _ball(range(0, 30)), tr, 30.0, 30.0)
+    assert (s, ov["to"], ov["by"]) == (4, 4, "official_pbp_contested")
 
 
 def test_a_kept_shooter_takes_the_scorers_name():
