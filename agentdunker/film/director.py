@@ -16,7 +16,7 @@ from typing import Optional
 import numpy as np
 
 from . import models, season
-from .render.nameplates import short_name
+from .render.nameplates import latin, short_name
 from .render.style import TEAM_ZH
 
 logger = logging.getLogger(__name__)
@@ -468,6 +468,23 @@ EVENT_NOTE = {"pass": "pass", "drive": "drives toward the basket", "screen": "se
               "cut": "cuts to the basket", "rebound": "rebound"}
 
 
+def pbp_scorer(events: Optional[dict]) -> Optional[dict]:
+    """The play-by-play scorer as a narration player when M5 found no track for him: only for the only field goal
+    in the clip window of a firm match. Chinese short name from the season tables, else the English surname."""
+    s = (events or {}).get("shot") or {}
+    off = s.get("official") or {}
+    if s.get("shooter_track") is not None or not off.get("person_id") or float(off.get("conf") or 0) < OFFICIAL_FILL_CONF:
+        return None
+    if (off.get("match") or {}).get("n_candidates") != 1:
+        return None
+    zh = season.zh_name(off["person_id"]) or {}
+    short = zh.get("name_zh_short") or latin((off.get("player") or "").split()[-1] if off.get("player") else "")
+    if not short:
+        return None
+    return {"name": off.get("player"), "name_zh": zh.get("name_zh") or short, "short_zh": short,
+            "team_abbr": off.get("team"), "conf": 0.9, "source": "official_pbp"}
+
+
 def narration_doc(edl: dict, events: Optional[dict], identity: Optional[dict], names: dict) -> dict:
     """M6 input in body time (film − intro): sections + events + shot."""
     off = INTRO_S
@@ -479,6 +496,10 @@ def narration_doc(edl: dict, events: Optional[dict], identity: Optional[dict], n
     live = seg(edl, "live")
     shot = edl.get("shot")
     tid = shot["shooter_track"] if shot else None
+    # no shooter track but a firm play-by-play scorer (h07 held-out: his track was lost): the commentary gets
+    # his name under a pseudo track, or it handed the basket to whoever last caught a pass
+    scorer = pbp_scorer(events) if shot and tid is None else None
+    who = [tid] if tid else (["pbp"] if scorer else [])
     # Live: opening + confident events at source time (live is 1.0× from body 0).
     for e in sorted((events or {}).get("events", []), key=lambda e: e["t"]):
         if float(e.get("conf") or 0) < EVENT_CONF or e["t"] >= live["source"][1]:
@@ -492,6 +513,9 @@ def narration_doc(edl: dict, events: Optional[dict], identity: Optional[dict], n
             note = "shoots"
             if shot and shot.get("bank_t"):
                 note += ", off the glass"
+            if scorer and not [a for a in acts if a is not None] and abs(e["t"] - shot["release_t"]) < 0.5:
+                acts = ["pbp"]
+                note += " (the scorer is named by the official play-by-play; the video tracks no box on him)"
         elif e["type"] == "pass" and len(acts) >= 2:
             note = f"passes from {label(acts[0], names)} to {label(acts[1], names, 'teammate')}"
         elif e.get("subtype") in ("steal", "turnover"):
@@ -514,7 +538,7 @@ def narration_doc(edl: dict, events: Optional[dict], identity: Optional[dict], n
         evs.append({"t": round(f["t0"], 3), "type": "drive" if f["type"] == "drive" else "other",
                     "actors": f["actors"][:1], "conf": f["conf"], "note": f"measured on court: {f['text']}"})
     if shot and shot.get("made") is not None and shot.get("made_t"):
-        evs.append({"t": round(shot["made_t"], 3), "type": "other", "actors": [tid] if tid else [], "conf": 0.8,
+        evs.append({"t": round(shot["made_t"], 3), "type": "other", "actors": who, "conf": 0.8,
                     "note": "the ball goes in" if shot["made"] else "the shot misses"})
     if not evs or evs[0]["t"] > 2.5:
         evs.insert(0, {"t": 0.2, "type": "other", "actors": [], "conf": 0.6, "note": "offense sets up in the half court"})
@@ -530,7 +554,7 @@ def narration_doc(edl: dict, events: Optional[dict], identity: Optional[dict], n
                         "phase": ph["title"]})
     fr = seg(edl, "freeze")
     if fr:
-        evs.append({"t": body(fr["film"][0]) + 0.2, "type": "shot", "actors": [tid] if tid else [], "conf": 0.9,
+        evs.append({"t": body(fr["film"][0]) + 0.2, "type": "shot", "actors": who, "conf": 0.9,
                     "note": "freeze frame at the release" + ("; official shot-quality card shown" if shot["xfg"] else "")})
     res = seg(edl, "resume")
     doc_shot = None
@@ -539,10 +563,10 @@ def narration_doc(edl: dict, events: Optional[dict], identity: Optional[dict], n
                     "xfg": shot["xfg"], "points": ((events or {}).get("shot") or {}).get("points")}
         if shot.get("made") and shot.get("made_t"):
             mt = _map_inv(res["time_map"], shot["made_t"])
-            evs.append({"t": body(res["film"][0] + mt) - 0.6, "type": "other", "actors": [tid] if tid else [],
+            evs.append({"t": body(res["film"][0] + mt) - 0.6, "type": "other", "actors": who,
                         "conf": 0.85, "note": "replay of the finish: " + ("banks it in" if shot.get("bank_t") else "it goes in")})
             if shot.get("xfg") is not None and shot["xfg"] <= 0.35 and res["film"][1] - res["film"][0] > 4.5:
-                evs.append({"t": body(res["film"][0] + mt) + 1.6, "type": "other", "actors": [tid] if tid else [],
+                evs.append({"t": body(res["film"][0] + mt) + 1.6, "type": "other", "actors": who,
                             "conf": 0.8, "note": "slow-motion after the make: a low-probability shot was made "
                                                  "(official xFG below 35%), praise the finish without new numbers"})
     players = {}
@@ -550,6 +574,8 @@ def narration_doc(edl: dict, events: Optional[dict], identity: Optional[dict], n
         if p.get("name_zh") and float(p.get("conf") or 0) >= 0.6:
             players[t_id] = {"jersey": p.get("jersey"), "team_abbr": p.get("team_abbr"), "name": p.get("name"),
                              "name_zh": p["name_zh"], "conf": p["conf"]}
+    if scorer:
+        players["pbp"] = scorer
     return {"duration": round(edl["duration"] - INTRO_S - OUTRO_S, 3), "sections": secs,
             "events": sorted(evs, key=lambda e: e["t"]), "shot": doc_shot, "players": players}
 

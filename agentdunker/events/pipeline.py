@@ -253,19 +253,20 @@ def _possession_gate(identity: dict | None, shot: dict, tracks: Tracks) -> tuple
     """(defence team label, release frame) when the official record leaves the ball with the offence from the
     clip start to the shot; None without a firm match or when the defence had the ball in between."""
     off, shooter = shot.get("official"), shot.get("shooter_track")
-    if not off or shooter is None or shot.get("release_f") is None:
+    if not off or shot.get("release_f") is None:
         return None
     ev = shot.get("evidence") or {}
-    pinned = (off["match"].get("name") or ev.get("shooter_override")
+    pinned = (off["match"].get("name") or ev.get("shooter_override") or ev.get("shooter_kept")
               or (ev.get("release") or {}).get("method") == "official_pbp_only")
-    if not pinned:
+    if not pinned or (shooter is None and not ev.get("shooter_override")):
         # h21 held-out: the dunk came from the PBP alone, so the check was skipped and the Lakers defenders next
         # to the Rockets' ball handler were narrated as passing to each other
         return None
-    o = tracks.team_of(shooter)
-    d = {"A": "B", "B": "A"}.get(o or "")
     teams = (identity or {}).get("teams") or {}
     tri = lambda g: (teams.get(g) or {}).get("abbr")  # noqa: E731
+    # no shooter track (the PBP scorer's own track was lost, h07): the offence is the scorer's team label
+    o = tracks.team_of(shooter) if shooter is not None else next((g for g in teams if tri(g) == off.get("team")), None)
+    d = {"A": "B", "B": "A"}.get(o or "")
     if not d or tri(o) != off.get("team"):
         return None
     return (d, float(shot["release_f"])) if defence_never_had_ball(identity, off, tri(o), tri(d)) else None

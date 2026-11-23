@@ -88,3 +88,30 @@ def test_a_kept_shooter_takes_the_scorers_name():
     assert IDENT["players"]["3"]["name"] == "Rudy Gobert"                          # the input is not touched
     events["shot"]["official"] = _off(team="DEN")
     assert director.official_shooter_swap(IDENT, events) is None                  # not the scorer's team
+
+
+def test_possession_check_still_runs_without_a_shooter_track(monkeypatch):
+    monkeypatch.setattr(P, "defence_never_had_ball", lambda *a: True)
+    ident = {"teams": {"A": {"abbr": "LAC"}, "B": {"abbr": "SAS"}}}
+    shot = {"official": {**_off(team="SAS"), "match": {"name": False, "team": False, "n_candidates": 1}},
+            "shooter_track": None, "release_f": 234.0,
+            "evidence": {"release": {"method": "wrist"}, "shooter_override": {"from": 3, "to": None}}}
+    assert P._possession_gate(ident, shot, _tracks({3: (0, 0, 1, 1)}, {3: "A"})) == ("A", 234.0)
+    shot["evidence"].pop("shooter_override")                                 # no track and nothing pinned: no check
+    assert P._possession_gate(ident, shot, _tracks({3: (0, 0, 1, 1)}, {3: "A"})) is None
+
+
+def test_commentary_names_the_pbp_scorer_without_a_track(monkeypatch):
+    from agentdunker.film import season
+    monkeypatch.setattr(season, "zh_name", lambda pid: {"name_zh": "迪伦·哈珀", "name_zh_short": "哈珀"})
+    events = {"events": [{"t": 7.8, "type": "shot", "actors": [], "conf": 0.9}],
+              "shot": {"shooter_track": None, "official": {**_off(team="SAS"), "player": "D. Harper", "person_id": 1642844}}}
+    edl = {"segments": [{"kind": "live", "film": [6.0, 20.0], "source": [0.0, 14.0]}], "decisions": {"facts": []},
+           "shot": {"shooter_track": None, "release_t": 7.83, "made": True, "made_t": 8.4, "bank_t": None, "xfg": None},
+           "duration": 26.0}
+    doc = director.narration_doc(edl, events, None, {})
+    assert doc["players"]["pbp"]["short_zh"] == "哈珀"
+    assert [e["actors"] for e in doc["events"] if e["type"] == "shot"] == [["pbp"]]
+    assert any(e["actors"] == ["pbp"] and "goes in" in e["note"] for e in doc["events"])
+    events["shot"]["shooter_track"] = 10                                    # a tracked shooter: nothing added
+    assert director.pbp_scorer(events) is None

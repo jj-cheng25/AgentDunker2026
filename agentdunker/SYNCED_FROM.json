@@ -181,9 +181,9 @@
    "module": "m5",
    "branch_worktree": "adk-cmd-m5",
    "source_package": "adk_events",
-   "commit": "7c8704e271e5aa25cc5d0bf77489527e59f8be75",
+   "commit": "0c06c42135488c36a4b7ee8381001a7097b4b5fa",
    "files": 22,
-   "tree_sha256": "1fdc82dd633b4228",
+   "tree_sha256": "d724ad1a499b5356",
    "rules": [
     {
      "file": "official.py",
@@ -253,9 +253,9 @@
    "module": "m7",
    "branch_worktree": "adk-cmd-m7",
    "source_package": "agentdunker",
-   "commit": "2d97583eb3b7015e69a70264164bc5005d303cbe",
+   "commit": "99d23a9d2e8db9fe395417c08c2904e8b56c32e6",
    "files": 30,
-   "tree_sha256": "c6d0ca874fa199cb",
+   "tree_sha256": "1f72a4018335a948",
    "rules": [
     {
      "file": "season.py",
