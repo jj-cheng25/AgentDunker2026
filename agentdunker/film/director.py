@@ -46,7 +46,7 @@ EVENT_CONF = 0.35
 # ---------------------------------------------------------------- facts from module outputs
 
 OFFICIAL_FILL_CONF = 0.75
-OFFICIAL_TRACK_CONF = 0.6   # the PBP names an unnamed shooter track: a matched game, the only field goal of its team
+OFFICIAL_TRACK_CONF = 0.55  # the PBP names an unnamed shooter track: a matched game (M3 >= 0.57), the only field goal of its team
 
 
 def official_shooter_fill(identity: Optional[dict], events: Optional[dict]) -> Optional[dict]:

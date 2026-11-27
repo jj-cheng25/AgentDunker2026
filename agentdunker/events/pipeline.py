@@ -224,7 +224,7 @@ def _main_shot(attempts, info, video, rim_by_f, tracks, court, identity, use_vlm
 
 
 AT_RIM_MAX_X = 3.0           # rim widths: a shot's ball comes down within this of the rim centre
-OFFICIAL_UNNAMED_CONF = 0.6   # a matched game (every "matched" game in 66 test clips was the right one)
+OFFICIAL_UNNAMED_CONF = 0.55  # a matched game: M3 gives every match >= 0.57 (all 81 in the test sets were right)
 
 
 def pick_attempt(attempts: list[dict]) -> dict:

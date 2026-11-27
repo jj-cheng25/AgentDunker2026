@@ -110,8 +110,12 @@ def _match_game(sb: list[dict], teams: list[str], nums: dict[str, list[str]], cf
         if share is not None and share >= need:
             res.update(status="matched", game_id=c["game_id"],
                        conf=round((1 - p) * (0.6 + 0.4 * share * min(1.0, n / 6)), 3))
-        elif share is None and p <= 0.01:
-            # no lineup check: the rarer the state, the less room for a game missing from the local data
+        elif share is None:
+            # no lineup check: the rarer the state, the less room for a game missing from the local data, and the
+            # higher the confidence. A missing game rarely leaves a lone same-teams look-alike: with each of 81
+            # clips' true games taken out of the index, one other game fit (h02, share 0.005), while the lone
+            # candidates of share 0.01-0.03 rejected before were all the right games (2026-11-27: PL-NBA m01/m11,
+            # bench c10/c13). Above 0.01 the confidence stays below 0.6.
             res.update(status="matched", game_id=c["game_id"],
                        conf=round((1 - p) * (0.6 + 0.2 * min(1.0, n / 6) + 0.3 * max(0.0, 1 - p / 0.01)), 3))
     if res["status"] != "matched":

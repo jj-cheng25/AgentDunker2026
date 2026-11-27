@@ -63,14 +63,17 @@ def test_unconfirmed_candidate_and_a_game_without_boxscore_stay_uncertain(monkey
     assert gm["status"] == "uncertain" and "1 without a boxscore" in gm["reason"]
 
 
-def test_lone_game_without_boxscore_needs_a_rare_state(monkeypatch):
+def test_lone_game_without_boxscore_needs_a_rare_enough_state(monkeypatch):
     sb = _sb("SERIES TIED 2-2")
     cands = [_cand("0042400175", "playoffs"), _cand("0022400515")]
     _patch(monkeypatch, cands, {}, {}, 0.0037)
     gm = idp._match_game(sb, ["LAC", "DEN"], NUMS, idp.IdentityConfig())
     assert gm["status"] == "matched" and gm["game_id"] == "0042400175"   # the banner removed the regular game
     assert 0.75 < gm["conf"] < 0.8 and gm["banner"]["game"] == 5
-    _patch(monkeypatch, [_cand("0022400515")], {}, {}, 0.03)          # c13-like: not rare enough
+    _patch(monkeypatch, [_cand("0022400515")], {}, {}, 0.03)          # c13: the right game at share 0.03
+    gm = idp._match_game(_sb(), ["LAC", "DEN"], NUMS, idp.IdentityConfig())
+    assert gm["status"] == "matched" and 0.55 < gm["conf"] < 0.6
+    _patch(monkeypatch, [_cand("0022400515")], {}, {}, 0.06)          # a state too common for a lone guess
     assert idp._match_game(_sb(), ["LAC", "DEN"], NUMS, idp.IdentityConfig())["status"] == "uncertain"
 
 
@@ -101,7 +104,7 @@ def test_shooter_fill_only_for_a_pinned_shot_of_the_shooters_team(monkeypatch):
     m = {"name": False, "team": True, "made": True, "n_candidates": 2}
     assert director.official_shooter_fill(_ident(), _events(match=m)) is None       # two field goals in the window
     assert director.official_shooter_fill(_ident(), _events(team="DEN")) is None    # other team's shot
-    assert director.official_shooter_fill(_ident(), _events(conf=0.55)) is None   # below a matched game (0.6)
+    assert director.official_shooter_fill(_ident(), _events(conf=0.5)) is None    # below any matched game (0.57)
     assert director.official_shooter_fill(_ident(name="Kris Dunn", person_id=1627739), _events()) is None
     ident = _ident()
     ident["players"]["3"]["person_id"] = 1627739                       # someone else already is that player

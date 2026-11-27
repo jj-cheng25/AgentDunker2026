@@ -49,7 +49,7 @@ def test_the_only_field_goal_of_the_shooters_team_pins_the_shot(monkeypatch):
     assert (off["match"]["n_candidates"], off["match"]["n_team"], off["conf"]) == (2, 1, 0.894)   # no 0.8 discount
     assert P.official_pins(off, None, named=False) == "team"
     assert P.official_pins(off, None, named=True) is None            # a name to check, and it does not match
-    assert P.official_pins({**off, "conf": 0.55}, None, named=False) is None
+    assert P.official_pins({**off, "conf": 0.5}, None, named=False) is None      # below any matched game (0.57)
 
 
 def test_the_record_overrules_a_miss_read_as_made(monkeypatch):
@@ -116,5 +116,5 @@ def test_the_record_names_an_unnamed_shooter_when_his_team_took_the_only_field_g
     assert (out["players"]["4"]["name"], out["players"]["4"]["name_zh_short"]) == ("G. Allen", "阿伦")
     off["match"]["n_team"] = 2                                # two shots of his team in the window
     assert director.official_shooter_fill(ident, events) is None
-    off["match"]["n_team"], off["conf"] = 1, 0.55             # too loose a game match
+    off["match"]["n_team"], off["conf"] = 1, 0.5              # below any matched game (0.57)
     assert director.official_shooter_fill(ident, events) is None
