@@ -37,7 +37,7 @@ MODULES = {
     "m1": ("adk-cmd-m1", "4f7005f", "adk_tracking", "tracking"),
     "m2": ("adk-cmd-m2", "85772b7", "adk_court", "court"),
     "m3": ("adk-cmd-m3", "56da025", "adk_identity", "identity"),
-    "m4": ("adk-cmd-m4", "f54f495", "adk_replay", "replay"),
+    "m4": ("adk-cmd-m4", "f18723e", "adk_replay", "replay"),
     "m5": ("adk-cmd-m5", "8c596d9", "adk_events", "events"),
     "m6": ("adk-cmd-m6", "35a8b08", "adk_narration", "narration"),
     "m7": ("adk-cmd-m7", "6f8a1fe", "agentdunker", "film"),

@@ -54,6 +54,10 @@ class SceneConfig:
     crossing_lead: float = 1.0     # s kept before the final half-court crossing
     min_observed_at_end: int = 8   # players that must be observed at the last replay frame
     pre_release_hold: float = 0.8  # s the shooter is shown holding the ball when possession is otherwise unknown
+    ball_state_conf: float = 0.3   # M5 ball-state holds, dribbles and passes this sure place the ball
+    max_pass_s: float = 1.2        # a longer M5 "pass" is a loose ball, not a pass to animate
+    ball_gap: float = 0.3          # s between a pass and its passer's or receiver's hold: still one chain
+    ball_bridge: float = 2.5       # s of loose, defence or unsure reads one offence player's possession spans
 
 
 def _frame_times(tracks: dict) -> dict[int, float]:
@@ -280,7 +284,8 @@ def build_play(tracks: dict, court: dict, identity: Optional[dict] = None, event
     duration = rel(t1)
     _add_actions(players, paths, shooter, release, t0, t1, smooth.rate_hz)
     _add_marks(players)
-    ball, ball_note = _ball_segments(events, shooter, release, t0, t1, {p.track_id for p in paths}, cfg)
+    ball, ball_note = _ball_segments(events, shooter, release, t0, t1, {p.track_id for p in paths}, cfg,
+                                     offense={p.track_id for p in paths if p.team == off_team})
     report["ball"] = ball_note
     # off/def are fixed for the whole window, possession is not: say so when the defence has the ball.
     def_ids = {p["id"] for p in players if p["team"] == "def"}
@@ -369,16 +374,78 @@ def _add_marks(players: list[dict]) -> None:
         de[i]["mark"] = off[j]["id"]
 
 
-def _ball_segments(events, shooter, release, t0, t1, shown: set, cfg: SceneConfig):
-    """Ball only where possession is known (pass chain / shooter gather); hidden segments elsewhere."""
+def _ball_segments(events, shooter, release, t0, t1, shown: set, cfg: SceneConfig, offense: Optional[set] = None):
+    """Ball only where possession is known; hidden segments elsewhere. M5's ball timeline first (holds, dribbles
+    and passes of shown offence players), else the confident pass chain + the shooter's gather.
+
+    The window ends before the release, so the gather alone rarely shows: with only passes of conf >= 0.5, clips
+    of one player dribbling into his shot showed no ball at all (2026-11-27: 0 s in 21 of 66 test replays,
+    against 9.4 s of 13.7 in the Durant reference, whose last confident pass went to the shooter)."""
+    items, source = _state_items(events, t0, t1, shown, offense or set(), cfg), "ball_state"
+    if not items:
+        items, source = _event_items(events, shooter, release, cfg)
+    segs, cursor = [], 0.0
+    rel = lambda t: round(float(t - t0), 3)  # noqa: E731
+    for a, b, seg in items:
+        seg = dict(seg)
+        chained, dribble = seg.pop("chained", False), seg.pop("dribble", False)
+        ids = [seg[k] for k in ("hold", "shot") if k in seg] + seg.get("pass", [])
+        a, b = max(a, t0, t0 + cursor), min(b, t1)
+        if b - a < (0.4 if "hold" in seg and not chained else 0.05) or any(i not in shown for i in ids):
+            continue  # no ball flash-ins (a hold between two passes is part of the chain, however short)
+        if rel(a) > cursor + 0.01:
+            segs.append({"t": [cursor, rel(a)], "hidden": True})
+        seg = {k: (f"T{v}" if k in ("hold", "shot") else [f"T{x}" for x in v] if k == "pass" else v)
+               for k, v in seg.items()}
+        if "hold" in seg:
+            seg["mode"] = "dribble" if dribble or b - a > 1.0 else "hands"
+        segs.append({"t": [rel(a), rel(b)], **seg})
+        cursor = rel(b)
+    if segs and cursor < rel(t1) - 0.01:
+        segs.append({"t": [cursor, rel(t1)], "hidden": True})
+    return segs, (source if segs else "hidden (possession unknown)")
+
+
+def _state_items(events, t0, t1, shown: set, offense: set, cfg: SceneConfig) -> list:
+    """(a, b, seg) from M5 ``ball_state``: holds and dribbles of shown offence players, passes between them.
+    The defence never gets the ball here: before the shot its holds are tracker noise (M5 already strips them
+    when the play-by-play shows no change of possession), and a wrong hand is worse than a hidden ball."""
+    mates = shown & offense
+    raw = []
+    for s in (events or {}).get("ball_state") or []:
+        a, b, kind = float(s["t0"]), float(s["t1"]), s.get("type")
+        if b <= t0 or a >= t1 or float(s.get("conf", 0.0)) < cfg.ball_state_conf:
+            continue
+        if kind in ("hold", "dribble") and s.get("holder") in mates:
+            raw.append([a, b, {"hold": s["holder"], "dribble": kind == "dribble"}])
+        elif (kind == "pass" and s.get("from") in mates and s.get("to") in mates and s["from"] != s["to"]
+              and b - a <= cfg.max_pass_s):
+            raw.append([a, b, {"pass": [s["from"], s["to"]], "arc": 0.4}])
+    items: list = []
+    for it in raw:       # one player's hold -> dribble -> hold is one possession, across short unsure stretches
+        last = items[-1] if items else None    # (m14: Doncic's dribble around 2 s of defence-contact noise)
+        if (last and "hold" in it[2] and last[2].get("hold") == it[2]["hold"] and it[0] - last[1] <= cfg.ball_bridge):
+            last[1], last[2]["dribble"] = it[1], last[2]["dribble"] or it[2]["dribble"]
+        else:
+            items.append(it)
+    for i, (a, b, seg) in enumerate(items):
+        if "hold" in seg:
+            prev, nxt = (items[i - 1] if i else None), (items[i + 1] if i + 1 < len(items) else None)
+            seg["chained"] = bool((prev and "pass" in prev[2] and prev[2]["pass"][1] == seg["hold"] and a - prev[1] <= cfg.ball_gap)
+                                  or (nxt and "pass" in nxt[2] and nxt[2]["pass"][0] == seg["hold"] and nxt[0] - b <= cfg.ball_gap))
+    return [(a, b, seg) for a, b, seg in items]
+
+
+def _event_items(events, shooter, release, cfg: SceneConfig) -> tuple[list, str]:
+    """(a, b, seg) from confident pass events (chained) and the shooter's gather + shot."""
     passes = sorted([e for e in (events or {}).get("events", []) if e.get("type") == "pass"
                      and len(e.get("actors") or []) >= 2 and float(e.get("conf", 1.0)) >= 0.5], key=lambda e: e["t"])
     items = []  # (source_a, source_b, segment)
-    holder, since = None, t0
+    holder, since = None, None
     for e in passes:
         a, b = e["actors"][0], e["actors"][1]
         if a != holder:              # chain broken: possession before this pass is unknown
-            since = max(since, e["t"] - 0.5)
+            since = e["t"] - 0.5 if since is None else max(since, e["t"] - 0.5)
         items.append((since, e["t"], {"hold": a}))
         flight = float(e.get("flight", 0.35))
         items.append((e["t"], e["t"] + flight, {"pass": [a, b], "arc": 0.4}))
@@ -388,25 +455,7 @@ def _ball_segments(events, shooter, release, t0, t1, shown: set, cfg: SceneConfi
             since = release - cfg.pre_release_hold
         items.append((since, release, {"hold": shooter}))
         items.append((release, release + 1.0, {"shot": shooter, "arc": 0.6}))
-    segs, cursor = [], 0.0
-    rel = lambda t: round(float(t - t0), 3)  # noqa: E731
-    for a, b, seg in items:
-        ids = [seg[k] for k in ("hold", "shot") if k in seg] + seg.get("pass", [])
-        a, b = max(a, t0, t0 + cursor), min(b, t1)
-        if b - a < (0.4 if "hold" in seg else 0.05) or any(i not in shown for i in ids):  # no ball flash-ins
-            continue
-        if rel(a) > cursor + 0.01:
-            segs.append({"t": [cursor, rel(a)], "hidden": True})
-        seg = {k: (f"T{v}" if k in ("hold", "shot") else [f"T{x}" for x in v] if k == "pass" else v)
-               for k, v in seg.items()}
-        if "hold" in seg:
-            seg["mode"] = "dribble" if b - a > 1.0 else "hands"
-        segs.append({"t": [rel(a), rel(b)], **seg})
-        cursor = rel(b)
-    if segs and cursor < rel(t1) - 0.01:
-        segs.append({"t": [cursor, rel(t1)], "hidden": True})
-    note = ("events" if passes else "shooter gather + shot") if segs else "hidden (possession unknown)"
-    return segs, note
+    return items, ("events" if passes else "shooter gather + shot")
 
 
 def _phases(events, t0, t1) -> list[dict]:
