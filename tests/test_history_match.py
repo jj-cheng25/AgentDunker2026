@@ -101,7 +101,7 @@ def test_shooter_fill_only_for_a_pinned_shot_of_the_shooters_team(monkeypatch):
     m = {"name": False, "team": True, "made": True, "n_candidates": 2}
     assert director.official_shooter_fill(_ident(), _events(match=m)) is None       # two field goals in the window
     assert director.official_shooter_fill(_ident(), _events(team="DEN")) is None    # other team's shot
-    assert director.official_shooter_fill(_ident(), _events(conf=0.6)) is None
+    assert director.official_shooter_fill(_ident(), _events(conf=0.55)) is None   # below a matched game (0.6)
     assert director.official_shooter_fill(_ident(name="Kris Dunn", person_id=1627739), _events()) is None
     ident = _ident()
     ident["players"]["3"]["person_id"] = 1627739                       # someone else already is that player

@@ -220,15 +220,18 @@ def match_shot(identity: dict | None, shooter_track: int | None, made: bool | No
 
     a = max(fgs, key=rank)
     r = rank(a)
+    n_team = sum(x.get("teamTricode") == want_team for x in fgs) if want_team else None
     out = {
         "game_id": gid, "action_number": a.get("actionNumber"), "person_id": a.get("personId"),
         "player": a.get("playerNameI"), "team": a.get("teamTricode"), "made": a.get("shotResult") == "Made",
         "points": 3 if a.get("actionType") == "3pt" else 2, "description": a.get("description"),
         "clock": a.get("clock"), "shot_distance_ft": a.get("shotDistance"),
-        "match": {"name": r[0], "team": r[1], "made": r[2], "n_candidates": len(fgs)},
+        "match": {"name": r[0], "team": r[1], "made": r[2], "n_candidates": len(fgs), "n_team": n_team},
     }
     out["xfg"] = xfg_for(gid, a.get("personId"), a.get("actionNumber")) if a.get("personId") else None
-    # Confidence: the clip window pins the play; name or team agreement and a single candidate make it firm.
-    out["conf"] = round(min(1.0, float(gm.get("conf") or 0.5)) * (1.0 if (r[0] or len(fgs) == 1) else
-                                                                  0.8 if r[1] else 0.6), 3)
+    # Confidence: the clip window pins the play; a name match, a single candidate, or the only field goal of the
+    # shooter track's team in the window make it firm (2026-11-27 missed-shot set: older seasons have no
+    # boxscore, so no name can match, and the other team's shot after the rebound is a second candidate).
+    pinned = r[0] or len(fgs) == 1 or (r[1] and n_team == 1)
+    out["conf"] = round(min(1.0, float(gm.get("conf") or 0.5)) * (1.0 if pinned else 0.8 if r[1] else 0.6), 3)
     return out

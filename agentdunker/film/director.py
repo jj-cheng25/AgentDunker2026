@@ -46,21 +46,25 @@ EVENT_CONF = 0.35
 # ---------------------------------------------------------------- facts from module outputs
 
 OFFICIAL_FILL_CONF = 0.75
+OFFICIAL_TRACK_CONF = 0.6   # the PBP names an unnamed shooter track: a matched game, the only field goal of its team
 
 
 def official_shooter_fill(identity: Optional[dict], events: Optional[dict]) -> Optional[dict]:
     """A copy of ``identity`` with the shooter's name from the play-by-play, when identity could not name the track.
 
     That happens when the matched game has no boxscore (older seasons come from a PBP mirror: a read jersey cannot
-    be mapped to a player) or the read number is not on the roster. Only for the only field goal in the clip
-    window, of the shooter track's own team, with no other track already named as that player
+    be mapped to a player) or the read number is not on the roster. Only for the only field goal of the shooter
+    track's own team in the clip window, in a matched game, with no other track already named as that player
     (2026-11-20 c04: LAC #8 in the 2025 first round, game 5 = K. Dunn). None when nothing changes."""
     shot = (events or {}).get("shot") or {}
     off, tid = shot.get("official") or {}, shot.get("shooter_track")
     m = off.get("match") or {}
-    if tid is None or not off.get("person_id") or m.get("n_candidates") != 1 or not m.get("team"):
+    # the only field goal of the track's team in the window (M5 n_team; older events have n_candidates only):
+    # the other team's shot after the rebound is no rival (2026-11-27 PL-NBA m10, G. Allen's missed three)
+    n_team = m.get("n_team") if m.get("n_team") is not None else m.get("n_candidates")
+    if tid is None or not off.get("person_id") or n_team != 1 or not m.get("team"):
         return None
-    if float(off.get("conf") or 0) < OFFICIAL_FILL_CONF:
+    if float(off.get("conf") or 0) < OFFICIAL_TRACK_CONF:
         return None
     players = (identity or {}).get("players") or {}
     p = players.get(str(tid))

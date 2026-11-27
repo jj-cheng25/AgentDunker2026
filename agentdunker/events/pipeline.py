@@ -160,11 +160,7 @@ def _main_shot(attempts, info, video, rim_by_f, tracks, court, identity, use_vlm
              "made_t": None, "bank_t": None, "rim_t": None, "rim_img": [], "release_f": None, "made_conf": 0.0, "made_source": None, "official": None}
     if not attempts:
         return _official_only(identity, tracks, info) or empty, None
-    # the clip's highlighted shot: the last attempt (a putback after a miss ends the possession), but a missed
-    # touch after the ball already reached the rim in the same visit is a tip at the rebound, not the shot
-    # (c04: Dunn's corner three at 7.6 s lost to a hand near the rim at 8.45 s with no shooter)
-    proper = [x for x in attempts if x["release"].f <= x["visit"].f_first or x["made"].get("made")]
-    a = (proper or attempts)[-1]
+    a = pick_attempt(attempts)
     rel, v, judged = a["release"], a["visit"], a["made"]
     fps = info.fps
     made, made_conf, source = judged.get("made"), judged.get("conf", 0.0), "ball_path"
@@ -184,6 +180,10 @@ def _main_shot(attempts, info, video, rim_by_f, tracks, court, identity, use_vlm
             if rel.f - 1 <= f <= f_end]
     off = match_shot(identity, rel.shooter_track, made)
     shooter, override, kept = arbitrate(identity, off, rel.shooter_track, a["ball"], tracks, rel.f, fps)
+    if override and override.get("to") is not None:
+        # the record's match (name/team agreement, team candidates) now refers to the shooter it handed the shot
+        # to, so M7 can name an unnamed one (2026-11-27 PL-NBA k03: Sengun's track had no name)
+        off = match_shot(identity, shooter, made) or off
     rel.shooter_track = shooter      # the attempt list, shot events and actions follow
     points, shot_xy, shot_dist = None, None, None
     if court and shooter is not None:
@@ -210,38 +210,84 @@ def _main_shot(attempts, info, video, rim_by_f, tracks, court, identity, use_vlm
     if off:
         doc["official"] = off
         doc["xfg"] = off.get("xfg")
-        if off.get("conf", 0) >= 0.8 and (off["match"].get("name") or override):
-            # the only field goal in the clip window, firmly matched: the play-by-play outcome stands even against
-            # a confident ball path (h12 held-out: a rim-bouncing three made, read as "came down outside the rim")
-            firm = off.get("conf", 0) >= 0.9 and off["match"].get("n_candidates") == 1
+        named = bool((((identity or {}).get("players") or {}).get(str(shooter)) or {}).get("name"))
+        pin = official_pins(off, override, named)
+        if pin:
+            # firm: the play-by-play outcome stands even against a confident ball path (h12 held-out: a
+            # rim-bouncing three made, read as "came down outside the rim"; 2026-11-27 PL-NBA m05/m08/m12: misses
+            # off the front rim read as "fell through" at 0.9, which the broadcast angle cannot tell apart)
+            firm = pin == "team" or (off.get("conf", 0) >= 0.9 and off["match"].get("n_candidates") == 1)
             if made is None or made_conf < 0.8 or (firm and made is not off["made"]):
-                if made is not None and made is not off["made"]:
-                    doc["evidence"]["made_disagreement"] = {"ball_path": made, "conf": made_conf,
-                                                            "rule": judged.get("rule"), "official": off["made"]}
-                    a["made"] = {**judged, "made": off["made"], "rule": "official_pbp"}   # in place: `a is shot_att`
-                    if not off["made"]:
-                        doc["made_t"] = None
-                doc["made"], doc["made_source"], doc["made_conf"] = off["made"], "official_pbp", off["conf"]
+                _official_outcome(doc, a, judged, made, made_conf, off)
             doc["points"] = off.get("points") or doc["points"]
     return doc, a
+
+
+AT_RIM_MAX_X = 3.0           # rim widths: a shot's ball comes down within this of the rim centre
+OFFICIAL_UNNAMED_CONF = 0.6   # a matched game (every "matched" game in 66 test clips was the right one)
+
+
+def pick_attempt(attempts: list[dict]) -> dict:
+    """The clip's highlighted shot: the last attempt (a putback after a miss ends the possession), except
+    - a missed touch after the ball already reached the rim in the same visit: a tip at the rebound (c04: Dunn's
+      corner three at 7.6 s lost to a hand near the rim at 8.45 s with no shooter);
+    - a box-fallback "release" (no hand seen letting go) whose ball never comes down within AT_RIM_MAX_X rim
+      widths of the rim: a tap or an outlet after the rebound (2026-11-27 PL-NBA m16: Dort's three, then a tap
+      6.5 rim widths off the rim; m17: Irving's three, then an unclear ball path 2 s later)."""
+    solid = [x for x in attempts if x["release"].evidence.get("method") != "box"
+             or any(abs(c[1]) < AT_RIM_MAX_X for c in x["made"].get("crossings") or [])] or attempts
+    proper = [x for x in solid if x["release"].f <= x["visit"].f_first or x["made"].get("made")]
+    return (proper or solid)[-1]
+
+
+def official_pins(off: dict, override: dict | None, named: bool) -> str | None:
+    """Whether the play-by-play field goal is this clip's shot, firmly enough for its outcome and points:
+    "name" when the shooter's name agrees (or the record moved the shot), in a firm match; "team" when the
+    shooter track has no name to check (older seasons have no boxscore; or the jersey went unread) but the
+    clip window holds exactly one field goal of its team, in a matched game."""
+    m = off.get("match") or {}
+    if off.get("conf", 0) >= 0.8 and (m.get("name") or override):
+        return "name"
+    if not named and m.get("team") and m.get("n_team") == 1 and off.get("conf", 0) >= OFFICIAL_UNNAMED_CONF:
+        return "team"
+    return None
+
+
+def _official_outcome(doc: dict, a: dict, judged: dict, made: bool | None, made_conf: float, off: dict) -> None:
+    """The play-by-play's made/missed replaces the video's, in the shot doc and in the attempt (events follow)."""
+    if made is not None and made is not off["made"]:
+        doc["evidence"]["made_disagreement"] = {"ball_path": made, "conf": made_conf,
+                                                "rule": judged.get("rule"), "official": off["made"]}
+        a["made"] = {**judged, "made": off["made"], "rule": "official_pbp"}   # in place: `a is shot_att`
+        if not off["made"]:
+            doc["made_t"] = None
+    doc["made"], doc["made_source"], doc["made_conf"] = off["made"], "official_pbp", off["conf"]
 
 
 def _official_only(identity: dict | None, tracks: Tracks, info) -> dict | None:
     """The clip's shot from the play-by-play alone, when the video found no attempt (h21 held-out: a cutting
     dunk, too short a flight for the ball path). Only for a firm match whose window holds exactly one field goal
-    and a single track named as its shooter; the release time maps the PBP clock onto the score-bug reads."""
+    and a single track named as its shooter; the release time maps the PBP clock onto the score-bug reads.
+    In a game with no names for the scorer's team (an older season without a boxscore) the shot comes with no
+    track, from any matched game (2026-11-27 PL-NBA k08: Anunoby's cutting dunk); M7 names the scorer from the
+    record."""
     off = match_shot(identity, None, None)
-    if not off or off["match"].get("n_candidates") != 1 or off.get("conf", 0) < 0.9 or not off.get("person_id"):
+    if not off or off["match"].get("n_candidates") != 1 or not off.get("person_id"):
         return None
     players = (identity or {}).get("players") or {}
     hits = [int(t) for t, p in players.items()
             if str(p.get("person_id")) == str(off["person_id"]) and p.get("team_abbr") == off.get("team")]
+    rosterless = not any(p.get("name") for p in players.values() if p.get("team_abbr") == off.get("team"))
+    if not ((len(hits) == 1 and off.get("conf", 0) >= 0.9)
+            or (not hits and rosterless and off.get("conf", 0) >= OFFICIAL_UNNAMED_CONF)):
+        return None
     release_t = clock_to_t(identity, clock_secs(off.get("clock")), info.t(info.n_frames - 1))
-    if len(hits) != 1 or release_t is None:
+    if release_t is None:
         return None
     f = info.f(release_t)
-    logger.info("shot from PBP only: %s at %.2f s (track %s)", off.get("description"), release_t, hits[0])
-    return {"release_t": release_t, "release_f": round(float(f), 1), "shooter_track": hits[0], "made": off["made"],
+    shooter = hits[0] if hits else None
+    logger.info("shot from PBP only: %s at %.2f s (track %s)", off.get("description"), release_t, shooter)
+    return {"release_t": release_t, "release_f": round(float(f), 1), "shooter_track": shooter, "made": off["made"],
             "made_conf": off["conf"], "made_source": "official_pbp", "conf": 0.5, "points": off.get("points"),
             "shot_court_xy": None, "shot_distance_ft": off.get("shot_distance_ft"), "ball_path_img": [], "rim_t": None,
             "made_t": None, "bank_t": None, "rim_img": [], "shot_type": None, "shot_type_conf": 0.0,
@@ -381,7 +427,7 @@ def arbitrate(identity: dict | None, off: dict | None, shooter: int | None, ball
     track was lost or swapped in M1)."""
     alt = official_shooter_track(identity, off, shooter)
     if alt is None:
-        return shooter, None, None
+        return official_team_shooter(identity, off, shooter, ball, tracks, f_rel, fps)
     span = (f_rel - PBP_HOLD_S * fps, f_rel + 0.1 * fps)
     held = ball_contact_frames(ball, tracks, alt, *span)
     held_v = ball_contact_frames(ball, tracks, shooter, *span) if shooter is not None else 0
@@ -403,6 +449,47 @@ def arbitrate(identity: dict | None, off: dict | None, shooter: int | None, ball
                 off.get("team"), off.get("player"), alt)
     return None, {"from": shooter, "to": None, "by": "official_pbp", **info,
                   "why": "the video's shooter is on the other team and the scorer's track never had the ball"}, None
+
+
+def official_team_shooter(identity: dict | None, off: dict | None, shooter: int | None, ball: dict, tracks: Tracks,
+                          f_rel: float, fps: float) -> tuple[int | None, dict | None, dict | None]:
+    """(shooter, override, kept) when the play-by-play pins the shot on the other team than the video's pick but
+    no track carries the scorer's name (older seasons have no boxscore, so nobody is named): the scorer is the
+    unnamed team-mate of his who had the ball before the release, or the one the pick was contesting at the
+    release; with neither, the pick is dropped (2026-11-27 PL-NBA k03 Sengun's hook, m19 Booker's floater: the
+    video took the defender at the rim)."""
+    if (not off or shooter is None or off["match"].get("n_candidates") != 1
+            or off.get("conf", 0) < OFFICIAL_UNNAMED_CONF or not off.get("team")):
+        return shooter, None, None
+    if _team_abbr(identity, tracks, shooter) in (None, off["team"]):
+        return shooter, None, None
+    players = (identity or {}).get("players") or {}
+    if any(str(p.get("person_id")) == str(off.get("person_id")) for p in players.values()):
+        return shooter, None, None       # a track carries the scorer's name: official_shooter_track's business
+    mates = [t for t, m in tracks.meta.items() if m.get("role", "player") == "player" and t != shooter and _team_abbr(identity, tracks, t) == off["team"]
+             and not (players.get(str(t)) or {}).get("name")]
+    if not mates:
+        return shooter, None, None
+    span = (f_rel - PBP_HOLD_S * fps, f_rel + 0.1 * fps)
+    held = {t: ball_contact_frames(ball, tracks, t, *span) for t in mates}
+    held_v = ball_contact_frames(ball, tracks, shooter, *span)
+    best = max(mates, key=lambda t: held[t])
+    info = {"player": off.get("player"), "team": off["team"], "held": held[best], "held_video_pick": held_v}
+    if held[best] >= PBP_MIN_HELD and held[best] >= PBP_HELD_SHARE * held_v:
+        logger.info("shooter: track %s -> %s (%s's team took the only field goal; it had the ball)", shooter, best,
+                    off["team"])
+        return best, {"from": shooter, "to": best, "by": "official_pbp_team", **info}, None
+    gaps = {t: box_gap(tracks, t, shooter, f_rel, fps) for t in mates}
+    near = [t for t, g in gaps.items() if g is not None and g <= PBP_CONTEST_GAP]
+    if len(near) == 1:
+        t = near[0]
+        logger.info("shooter: track %s -> %s (%s's player the pick was guarding at the release)", shooter, t, off["team"])
+        return t, {"from": shooter, "to": t, "by": "official_pbp_team_contested", "gap": round(gaps[t], 2),
+                   **{**info, "held": held[t]}}, None
+    logger.info("shooter: none (track %s is not on %s, which took the only field goal)", shooter, off["team"])
+    return None, {"from": shooter, "to": None, "by": "official_pbp_team", **info,
+                  "why": f"the video's shooter is not on {off['team']}, and no {off['team']} track had the ball "
+                         "or was guarded by it at the release"}, None
 
 
 def official_shooter_track(identity: dict | None, off: dict | None, shooter: int | None) -> int | None:
